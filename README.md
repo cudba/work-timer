@@ -1,5 +1,5 @@
-<div align="center">
-<br>
+#work-timer
+Tracks your work time based on system idle state based on [Power Monitor](https://electronjs.org/docs/api/power-monitor)
 
 ## Install
 
@@ -41,4 +41,10 @@ Then,
 $ yarn package-all
 ```
 
+##Features
+- [x] capture work periods
+- [x] start / end work period based on active <=> idle state
+- [x] export report in Eurotime format
+- [ ] start / end  work perdiod based on lock-screen <=> unlock-screen
+- [ ] start / end work period based on laptop suspended <=> resumed
 
