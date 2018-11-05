@@ -1,4 +1,4 @@
-#work-timer
+# work-timer
 Tracks your work time based on system idle state based on [Power Monitor](https://electronjs.org/docs/api/power-monitor)
 
 ## Install
