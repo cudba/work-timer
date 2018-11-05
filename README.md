@@ -41,10 +41,10 @@ Then,
 $ yarn package-all
 ```
 
-##Features
-- [x] capture work periods
+## Features
+- [x] start / end work session on manual interaction
 - [x] start / end work period based on active <=> idle state
-- [x] export report in Eurotime format
 - [ ] start / end  work perdiod based on lock-screen <=> unlock-screen
 - [ ] start / end work period based on laptop suspended <=> resumed
+- [x] export report in Eurotime format
 
