@@ -42,7 +42,9 @@ type State = {
   activeCheckerIntervalSec: number,
   workPeriods: WorkPeriod[],
   currentWorkPeriod: WorkPeriod,
-  showEvents: boolean
+  showEvents: boolean,
+  setIdleOnSuspend: boolean,
+  setIdleOnLock: boolean
 };
 
 function stopEvent(timeStamp: string, reason: string) {
@@ -53,33 +55,63 @@ function startEvent(timeStamp: string, reason: string) {
   return { timeStamp, type: EVENT_TYPE.start, reason };
 }
 const initialState = {
-  idleThresholdSec: 10,
-  activeCheckerIntervalSec: 5,
+  idleThresholdSec: 600,
+  activeCheckerIntervalSec: 300,
   tracking: false,
   working: false,
   idleTime: 0,
   currentWorkPeriod: undefined,
   workPeriods: [],
   events: [],
-  showEvents: false
+  showEvents: false,
+  setIdleOnSuspend: false,
+  setIdleOnLock: false
 };
 
 export default class WorkTimer extends Component<Props, State> {
   state = initialState;
   idleTimerId = 0;
 
-  constructor(props) {
-    super(props);
+  componentDidMount() {
     const persistedState = localStorage.getItem('workdays');
     if (persistedState != null) {
-      this.state = JSON.parse(persistedState);
+      this.setState(JSON.parse(persistedState));
     }
   }
+
 
   componentDidUpdate(prevProps, prevState) {
     if (prevState !== this.state) {
       // todo: store per day
       localStorage.setItem('workdays', JSON.stringify(this.state));
+      const { setIdleOnLock, setIdleOnSuspense } = this.state;
+      if (prevState.setIdleOnLock && !setIdleOnLock) {
+        electron.remote.powerMonitor.removeListener(
+          'unlock-screen',
+          this.setUnlocked
+        );
+        electron.remote.powerMonitor.removeListener(
+          'lock-screen',
+          this.setLocked
+        );
+      } else if (!prevState.setIdleOnLock && setIdleOnLock) {
+        electron.remote.powerMonitor.addListener(
+          'unlock-screen',
+          this.setUnlocked
+        );
+        electron.remote.powerMonitor.addListener('lock-screen', this.setLocked);
+      }
+
+      if (prevState.setIdleOnSuspend && !setIdleOnSuspense) {
+        electron.remote.powerMonitor.removeListener(
+          'suspend',
+          this.setSuspended
+        );
+        electron.remote.powerMonitor.removeListener('resume', this.setResumed);
+      } else if (!prevState.setIdleOnSuspend && setIdleOnSuspense) {
+        electron.remote.powerMonitor.addListener('suspend', this.setUnlocked);
+        electron.remote.powerMonitor.addListener('resume', this.setLocked);
+      }
     }
   }
 
@@ -123,6 +155,18 @@ export default class WorkTimer extends Component<Props, State> {
   onShowEventsChange = event => {
     this.setState({
       showEvents: event.target.checked
+    });
+  };
+
+  onSetIdleOnLockChange = event => {
+    this.setState({
+      setIdleOnLock: event.target.checked
+    });
+  };
+
+  onSetIdleOnSuspendChange = event => {
+    this.setState({
+      setIdleOnSuspend: event.target.checked
     });
   };
 
@@ -194,13 +238,38 @@ export default class WorkTimer extends Component<Props, State> {
     this.setIdleCheckerWorkMode(currentIdleTime);
   };
 
+  setSuspended = () => {
+    this.stopWorkPeriod(moment().toISOString(), REASON.suspend);
+  };
+
+  setResumed = () => {
+    this.startWorkPeriod(moment().toISOString(), REASON.resume);
+  };
+
+  setLocked = () => {
+    this.stopWorkPeriod(moment().toISOString(), REASON.lock);
+  };
+
+  setUnlocked = () => {
+    this.startWorkPeriod(moment().toISOString(), REASON.unlock);
+  };
+
   setIdle = currentIdleTime => {
     // todo: substract idle time
-    this.stopWorkPeriod(moment().toISOString(), REASON.idle);
+    this.stopWorkPeriod(
+      moment()
+        .subtract(currentIdleTime, 'seconds')
+        .toISOString(),
+      REASON.idle
+    );
   };
 
   setActive = currentIdleTime => {
-    this.startWorkPeriod(moment().toISOString(), REASON.active, currentIdleTime);
+    this.startWorkPeriod(
+      moment().toISOString(),
+      REASON.active,
+      currentIdleTime
+    );
   };
 
   checkIfIdle = () => {
@@ -248,7 +317,9 @@ export default class WorkTimer extends Component<Props, State> {
       idleThresholdSec,
       workPeriods,
       currentWorkPeriod,
-      showEvents
+      showEvents,
+      setIdleOnLock,
+      setIdleOnSuspend
     } = this.state;
     return (
       <div
@@ -280,15 +351,28 @@ export default class WorkTimer extends Component<Props, State> {
             />
           </div>
           <div style={{ margin: '20px 0' }}>
-            <div style={{ marginTop: 10 }}>
-              <input
-                type="checkbox"
-                name="Show Events"
-                value={showEvents}
-                onChange={this.onShowEventsChange}
-              />
-              show events
-            </div>
+            <input
+              type="checkbox"
+              checked={setIdleOnLock}
+              onChange={this.onSetIdleOnLockChange}
+            />
+            set idle on screen lock
+          </div>
+          <div style={{ margin: '20px 0' }}>
+            <input
+              type="checkbox"
+              checked={setIdleOnSuspend}
+              onChange={this.onSetIdleOnSuspendChange}
+            />
+            set idle on pc suspend
+          </div>
+          <div style={{ margin: '20px 0' }}>
+            <input
+              type="checkbox"
+              checked={showEvents}
+              onChange={this.onShowEventsChange}
+            />
+            show events
           </div>
           <div style={{ fontSize: 12 }}>
             <div>tracking: {tracking ? 'true' : 'false'}</div>
