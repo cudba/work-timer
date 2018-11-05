@@ -97,7 +97,6 @@ export default class WorkTimer extends Component<Props, State> {
       return reportPerDay;
     }, {});
 
-    console.log(dailyPeriods);
     const workTimeReport = Object.keys(dailyPeriods).reduce(
       (report, day) =>
         `${report}${day}: ${dailyPeriods[day].reduce(
@@ -115,7 +114,6 @@ export default class WorkTimer extends Component<Props, State> {
         )}` + '\n',
       ''
     );
-    console.log(workTimeReport);
     const blob = new Blob([workTimeReport], {
       type: 'text/plain;charset=utf-8'
     });
@@ -198,11 +196,11 @@ export default class WorkTimer extends Component<Props, State> {
 
   setIdle = currentIdleTime => {
     // todo: substract idle time
-    this.stopWorkPeriod(moment().toISOString, REASON.idle);
+    this.stopWorkPeriod(moment().toISOString(), REASON.idle);
   };
 
   setActive = currentIdleTime => {
-    this.startWorkPeriod(moment().toISOString, REASON.active, currentIdleTime);
+    this.startWorkPeriod(moment().toISOString(), REASON.active, currentIdleTime);
   };
 
   checkIfIdle = () => {
