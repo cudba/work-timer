@@ -244,7 +244,6 @@ export default class WorkTimer extends Component<Props, State> {
   };
 
   setIdle = currentIdleTime => {
-    // todo: substract idle time
     this.stopWorkPeriod(
       moment()
         .subtract(currentIdleTime, 'seconds')
@@ -263,7 +262,7 @@ export default class WorkTimer extends Component<Props, State> {
 
   checkIfIdle = () => {
     electron.remote.powerMonitor.querySystemIdleTime(currentIdleTime => {
-      const { working, idleTime, idleThresholdSec } = this.state;
+      const { working, idleThresholdSec } = this.state;
 
       this.setState({ idleTime: currentIdleTime });
       if (working) {
@@ -272,7 +271,7 @@ export default class WorkTimer extends Component<Props, State> {
         } else {
           this.setIdleCheckerWorkMode(currentIdleTime);
         }
-      } else if (currentIdleTime <= idleTime) {
+      } else if (currentIdleTime <= idleThresholdSec) {
         this.setActive(currentIdleTime);
       } else {
         this.setIdleCheckerChillMode();
@@ -282,6 +281,7 @@ export default class WorkTimer extends Component<Props, State> {
 
   setIdleCheckerChillMode = () => {
     const { activeCheckerIntervalSec } = this.state;
+    clearTimeout(this.idleTimerId)
     this.idleTimerId = setTimeout(
       this.checkIfIdle,
       activeCheckerIntervalSec * 1000
@@ -290,6 +290,7 @@ export default class WorkTimer extends Component<Props, State> {
 
   setIdleCheckerWorkMode = currentIdleTime => {
     const { idleThresholdSec } = this.state;
+    clearTimeout(this.idleTimerId)
     this.idleTimerId = setTimeout(
       this.checkIfIdle,
       (idleThresholdSec - currentIdleTime) * 1000
