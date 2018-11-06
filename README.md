@@ -44,7 +44,10 @@ $ yarn package-all
 ## Features
 - [x] start / end work session on manual interaction
 - [x] start / end work period based on active <=> idle state
-- [ ] start / end  work perdiod based on lock-screen <=> unlock-screen
-- [ ] start / end work period based on laptop suspended <=> resumed
+- [x] start / end  work perdiod based on lock-screen <=> unlock-screen
+- [x] start / end work period based on laptop suspended <=> resumed
 - [x] export report in Eurotime format
+- [ ] export between dates
+- [ ] split workperiods per month
+- [ ] review & change (merge, alter...) workperiods
 
