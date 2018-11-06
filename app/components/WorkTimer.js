@@ -79,44 +79,33 @@ export default class WorkTimer extends Component<Props, State> {
     }
   }
 
-
   componentDidUpdate(prevProps, prevState) {
     if (prevState !== this.state) {
       // todo: store per day
       localStorage.setItem('workdays', JSON.stringify(this.state));
-      const { setIdleOnLock, setIdleOnSuspense } = this.state;
-      if (prevState.setIdleOnLock && !setIdleOnLock) {
-        electron.remote.powerMonitor.removeListener(
-          'unlock-screen',
-          this.setUnlocked
-        );
-        electron.remote.powerMonitor.removeListener(
-          'lock-screen',
-          this.setLocked
-        );
-      } else if (!prevState.setIdleOnLock && setIdleOnLock) {
-        electron.remote.powerMonitor.addListener(
-          'unlock-screen',
-          this.setUnlocked
-        );
-        electron.remote.powerMonitor.addListener('lock-screen', this.setLocked);
-      }
-
-      if (prevState.setIdleOnSuspend && !setIdleOnSuspense) {
-        electron.remote.powerMonitor.removeListener(
-          'suspend',
-          this.setSuspended
-        );
-        electron.remote.powerMonitor.removeListener('resume', this.setResumed);
-      } else if (!prevState.setIdleOnSuspend && setIdleOnSuspense) {
-        electron.remote.powerMonitor.addListener('suspend', this.setUnlocked);
-        electron.remote.powerMonitor.addListener('resume', this.setLocked);
+      const { setIdleOnLock, setIdleOnSuspend, tracking } = this.state;
+      if (prevState.tracking && !tracking) {
+        this.removePowerMonitorListeners();
+      } else if (!prevState.tracking && tracking) {
+        this.addPowerMonitorListners();
+      } else if (tracking) {
+        if (prevState.setIdleOnLock && !setIdleOnLock) {
+          this.removeLockListeners();
+        } else if (!prevState.setIdleOnLock && setIdleOnLock) {
+          this.addLockListeners();
+        }
+        if (prevState.setIdleOnSuspend && !setIdleOnSuspend) {
+          this.removeSuspendListeners();
+        } else if (!prevState.setIdleOnSuspend && setIdleOnSuspend) {
+          this.addSuspendListeners();
+        }
       }
     }
   }
 
   componentWillUnmount() {
     clearTimeout(this.idleTimerId);
+    this.removePowerMonitorListeners();
   }
 
   exportReport = () => {
@@ -306,6 +295,49 @@ export default class WorkTimer extends Component<Props, State> {
       (idleThresholdSec - currentIdleTime) * 1000
     );
   };
+
+  addSuspendListeners() {
+    electron.remote.powerMonitor.addListener('suspend', this.setUnlocked);
+    electron.remote.powerMonitor.addListener('resume', this.setLocked);
+  }
+
+  removeSuspendListeners() {
+    electron.remote.powerMonitor.removeListener('suspend', this.setSuspended);
+    electron.remote.powerMonitor.removeListener('resume', this.setResumed);
+  }
+
+  addLockListeners() {
+    electron.remote.powerMonitor.addListener('unlock-screen', this.setUnlocked);
+    electron.remote.powerMonitor.addListener('lock-screen', this.setLocked);
+  }
+
+  removeLockListeners() {
+    electron.remote.powerMonitor.removeListener(
+      'unlock-screen',
+      this.setUnlocked
+    );
+    electron.remote.powerMonitor.removeListener('lock-screen', this.setLocked);
+  }
+
+  removePowerMonitorListeners() {
+    this.removeLockListeners();
+    this.removeSuspendListeners();
+  }
+
+  addPowerMonitorListners() {
+    const { setIdleOnSuspend, setIdleOnLock } = this.state;
+    if (!setIdleOnLock) {
+      this.removeLockListeners();
+    } else if (setIdleOnLock) {
+      this.addLockListeners();
+    }
+
+    if (!setIdleOnSuspend) {
+      this.removeSuspendListeners();
+    } else if (setIdleOnSuspend) {
+      this.addSuspendListeners();
+    }
+  }
 
   render() {
     const {
