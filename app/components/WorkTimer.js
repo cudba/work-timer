@@ -44,7 +44,6 @@ type State = {
   currentWorkPeriod?: WorkPeriod,
   showEvents: boolean,
   setIdleOnTimeOut: boolean,
-  setIdleOnSuspend: boolean,
   setIdleOnLock: boolean
 };
 
@@ -59,8 +58,8 @@ function startEvent(timeStamp: string, reason: $Values<typeof REASON>) {
   return { timeStamp, type: EVENT_TYPE.start, reason };
 }
 const initialState: State = {
-  timeOutThresholdSec: 600,
-  activeCheckerIntervalSec: 300,
+  timeOutThresholdSec: 15,
+  activeCheckerIntervalSec: 5,
   tracking: false,
   working: false,
   idleTime: 0,
@@ -68,8 +67,7 @@ const initialState: State = {
   workPeriods: [],
   events: [],
   showEvents: false,
-  setIdleOnTimeOut: false,
-  setIdleOnSuspend: false,
+  setIdleOnTimeOut: true,
   setIdleOnLock: false
 };
 
@@ -94,42 +92,9 @@ export default class WorkTimer extends Component<Props, State> {
   }
 
   componentWillUnmount() {
-    clearTimeout(this.idleTimerId);
-    this.removePowerMonitorListeners();
+    this.stopIdleChecker();
+    this.removeLockListeners();
   }
-
-  exportReport = () => {
-    const { workPeriods } = this.state;
-    const dailyPeriods = workPeriods.reduce((reportPerDay, period) => {
-      const key = moment(period.startTime).format('YYYY-MM-DD');
-      reportPerDay[key] = reportPerDay[key]
-        ? [...reportPerDay[key], period]
-        : [period];
-      return reportPerDay;
-    }, {});
-
-    const workTimeReport = Object.keys(dailyPeriods).reduce(
-      (report, day) =>
-        `${report}${day}: ${dailyPeriods[day].reduce(
-          (dailyRaport, period) =>
-            dailyRaport +
-            moment(period.startTime)
-              .tz('Europe/Zurich')
-              .format('HHmm') +
-            '\t' +
-            moment(period.endTime)
-              .tz('Europe/Zurich')
-              .format('HHmm') +
-            '\t',
-          ''
-        )}` + '\n',
-      ''
-    );
-    const blob = new Blob([workTimeReport], {
-      type: 'text/plain;charset=utf-8'
-    });
-    saveAs(blob, 'worktimer-report.txt');
-  };
 
   onShowEventsChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     this.setState({
@@ -167,21 +132,6 @@ export default class WorkTimer extends Component<Props, State> {
     });
   };
 
-  onSetIdleOnSuspendChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
-    const setIdleOnSuspend = event.target.checked;
-    const { working } = this.state;
-    if (working) {
-      if (setIdleOnSuspend) {
-        this.addSuspendListeners();
-      } else {
-        this.removeSuspendListeners();
-      }
-    }
-    this.setState({
-      setIdleOnSuspend
-    });
-  };
-
   onIdleThresholdChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     this.setState({
       timeOutThresholdSec: parseInt(event.target.value, 10) || 0
@@ -196,92 +146,14 @@ export default class WorkTimer extends Component<Props, State> {
     });
   };
 
-  clear = () => {
-    clearTimeout(this.idleTimerId);
-    this.setState(initialState);
-  };
-
-  toggleTracking = () => {
-    const { tracking } = this.state;
-    if (tracking) {
-      this.stopWorkPeriod(moment().toISOString(), REASON.user_action, false);
-    } else {
-      this.startWorkPeriod(moment().toISOString(), REASON.user_action);
-    }
-  };
-
-  stopWorkPeriod = (
-    timeStamp: string,
-    reason: $Values<typeof REASON>,
-    keepTracking: boolean = true
-  ) => {
-    if (!keepTracking) {
-      clearTimeout(this.idleTimerId);
-      this.removePowerMonitorListeners();
-    } else {
-      this.setIdleCheckerChillMode();
-    }
-    this.setState(prevState => {
-      const { workPeriods, currentWorkPeriod, idleTime } = prevState;
-      if (currentWorkPeriod) {
-        return {
-          tracking: keepTracking,
-          working: false,
-          workPeriods: [
-            ...workPeriods,
-            { startTime: currentWorkPeriod.startTime, endTime: timeStamp }
-          ],
-          idleTime: keepTracking ? idleTime : 0,
-          currentWorkPeriod: undefined,
-          events: [...prevState.events, stopEvent(timeStamp, reason)]
-        };
-      }
-      return {
-        tracking: keepTracking,
-        working: false,
-        events: [...prevState.events, stopEvent(timeStamp, reason)]
-      };
-    });
-  };
-
-  startWorkPeriod = (
-    timeStamp: string,
-    reason: $Values<typeof REASON>,
-    currentIdleTime: number = 0
-  ) => {
-    const { tracking, setIdleOnSuspend, setIdleOnLock } = this.state;
-    if (!tracking) {
-      if (setIdleOnLock) {
-        this.addLockListeners();
-      }
-      if (setIdleOnSuspend) {
-        this.addSuspendListeners();
-      }
-    }
-    this.setIdleCheckerWorkMode(currentIdleTime);
-
-    this.setState(prevState => ({
-      tracking: true,
-      working: true,
-      currentWorkPeriod: { startTime: timeStamp },
-      events: [...prevState.events, startEvent(timeStamp, reason)]
-    }));
-  };
-
-  setSuspended = () => {
-    this.stopWorkPeriod(moment().toISOString(), REASON.suspend);
-  };
-
-  setResumed = () => {
-    this.startWorkPeriod(moment().toISOString(), REASON.resume);
-  };
-
   setLocked = () => {
+    this.stopIdleChecker();
     this.stopWorkPeriod(moment().toISOString(), REASON.lock);
   };
 
   setUnlocked = () => {
     this.startWorkPeriod(moment().toISOString(), REASON.unlock);
+    this.setIdleChecker(true);
   };
 
   setIdle = (currentIdleTime: number) => {
@@ -291,14 +163,108 @@ export default class WorkTimer extends Component<Props, State> {
         .toISOString(),
       REASON.idle
     );
+    this.setIdleChecker();
   };
 
   setActive = (currentIdleTime: number) => {
-    this.startWorkPeriod(
-      moment().toISOString(),
-      REASON.active,
-      currentIdleTime
+    this.startWorkPeriod(moment().toISOString(), REASON.active);
+    this.setIdleChecker(true, currentIdleTime);
+  };
+
+  setIdleChecker(workMode: boolean = false, currentIdleTime: number = 0) {
+    const { setIdleOnTimeOut } = this.state;
+    if (setIdleOnTimeOut) {
+      if (workMode) {
+        this.setIdleCheckerWorkMode(currentIdleTime);
+      } else {
+        this.setIdleCheckerChillMode();
+      }
+    }
+  }
+
+  startWorkPeriod = (timeStamp: string, reason: $Values<typeof REASON>) => {
+    this.setState(prevState => ({
+      tracking: true,
+      working: true,
+      currentWorkPeriod: { startTime: timeStamp },
+      events: [...prevState.events, startEvent(timeStamp, reason)]
+    }));
+  };
+
+  stopWorkPeriod = (timeStamp: string, reason: $Values<typeof REASON>) => {
+    this.setState(prevState => {
+      const { workPeriods, currentWorkPeriod } = prevState;
+      if (currentWorkPeriod) {
+        return {
+          working: false,
+          workPeriods: [
+            ...workPeriods,
+            { startTime: currentWorkPeriod.startTime, endTime: timeStamp }
+          ],
+          currentWorkPeriod: undefined,
+          events: [...prevState.events, stopEvent(timeStamp, reason)]
+        };
+      }
+      return {
+        working: false,
+        events: [...prevState.events, stopEvent(timeStamp, reason)]
+      };
+    });
+  };
+
+  toggleTracking = () => {
+    const { tracking, setIdleOnLock } = this.state;
+    if (tracking) {
+      this.stopIdleChecker();
+      this.removeLockListeners();
+      this.stopWorkPeriod(moment().toISOString(), REASON.user_action);
+      this.setState({ idleTime: 0, tracking: false });
+    } else {
+      if (setIdleOnLock) {
+        this.addLockListeners();
+      }
+      this.setIdleChecker(true);
+      this.startWorkPeriod(moment().toISOString(), REASON.user_action);
+      this.setState({ tracking: true });
+    }
+  };
+
+  clear = () => {
+    clearTimeout(this.idleTimerId);
+    this.setState(initialState);
+  };
+
+  exportReport = () => {
+    const { workPeriods } = this.state;
+    const dailyPeriods = workPeriods.reduce((reportPerDay, period) => {
+      const key = moment(period.startTime).format('YYYY-MM-DD');
+      reportPerDay[key] = reportPerDay[key]
+        ? [...reportPerDay[key], period]
+        : [period];
+      return reportPerDay;
+    }, {});
+
+    const workTimeReport = Object.keys(dailyPeriods).reduce(
+      (report, day) =>
+        `${report}${day}: ${dailyPeriods[day].reduce(
+          (dailyRaport, period) =>
+            dailyRaport +
+            moment(period.startTime)
+              .tz('Europe/Zurich')
+              .format('HHmm') +
+            '\t' +
+            moment(period.endTime)
+              .tz('Europe/Zurich')
+              .format('HHmm') +
+            '\t',
+          ''
+        )}` + '\n',
+      ''
     );
+    const blob = new Blob([workTimeReport], {
+      type: 'text/plain;charset=utf-8'
+    });
+    saveAs(blob, 'worktimer-report.txt');
   };
 
   checkIfIdle = () => {
@@ -339,13 +305,7 @@ export default class WorkTimer extends Component<Props, State> {
   };
 
   init(state: State) {
-    const {
-      tracking,
-      working,
-      setIdleOnTimeOut,
-      setIdleOnSuspend,
-      setIdleOnLock
-    } = state;
+    const { tracking, working, setIdleOnTimeOut, setIdleOnLock } = state;
     if (tracking) {
       if (setIdleOnTimeOut) {
         if (working) {
@@ -353,30 +313,21 @@ export default class WorkTimer extends Component<Props, State> {
         } else {
           this.setIdleCheckerChillMode();
         }
-        if (setIdleOnLock) {
-          this.addLockListeners();
-        }
-        if (setIdleOnSuspend) {
-          this.addSuspendListeners();
-        }
+      }
+      if (setIdleOnLock) {
+        this.addLockListeners();
       }
     }
     this.setState(state);
   }
 
-  addSuspendListeners() {
-    electron.remote.powerMonitor.addListener('suspend', this.setSuspended);
-    electron.remote.powerMonitor.addListener('resume', this.setResumed);
-  }
-
-  removeSuspendListeners() {
-    electron.remote.powerMonitor.removeListener('suspend', this.setSuspended);
-    electron.remote.powerMonitor.removeListener('resume', this.setResumed);
-  }
-
   addLockListeners() {
     electron.remote.powerMonitor.addListener('unlock-screen', this.setUnlocked);
     electron.remote.powerMonitor.addListener('lock-screen', this.setLocked);
+  }
+
+  stopIdleChecker() {
+    clearTimeout(this.idleTimerId);
   }
 
   removeLockListeners() {
@@ -385,11 +336,6 @@ export default class WorkTimer extends Component<Props, State> {
       this.setUnlocked
     );
     electron.remote.powerMonitor.removeListener('lock-screen', this.setLocked);
-  }
-
-  removePowerMonitorListeners() {
-    this.removeLockListeners();
-    this.removeSuspendListeners();
   }
 
   render() {
@@ -404,13 +350,12 @@ export default class WorkTimer extends Component<Props, State> {
       currentWorkPeriod,
       showEvents,
       setIdleOnLock,
-      setIdleOnSuspend,
       setIdleOnTimeOut
     } = this.state;
     return (
       <>
         <div style={{ fontSize: 12, position: 'absolute', right: 0, top: 0 }}>
-          <div>tracking: {tracking ? 'true' : 'false'}</div>
+          <div>tracking: {String(tracking)}</div>
           <div>state: {working ? 'working' : 'chilling'}</div>
           <div>Idle time: {idleTime}</div>
         </div>
@@ -483,15 +428,13 @@ export default class WorkTimer extends Component<Props, State> {
                 checked={setIdleOnLock}
                 onChange={this.onSetIdleOnLockChange}
               />
-              set idle on screen lock (idle-on-time-out rules still apply)
-            </div>
-            <div style={{ margin: '20px 0' }}>
-              <input
-                type="checkbox"
-                checked={setIdleOnSuspend}
-                onChange={this.onSetIdleOnSuspendChange}
-              />
-              set idle on pc suspend
+              set idle on screen lock / suspense{' '}
+              <span style={{ fontSize: 12 }}>
+                (Suspending the pc also triggers a lock / unlock event)
+              </span>
+              <div style={{ fontSize: 12, margin: '5px 10px' }}>
+                Note: If unchecked, idle-on-time-out rules apply
+              </div>
             </div>
             <div style={{ margin: '20px 0' }}>
               <input
