@@ -2,8 +2,9 @@
 import React, { Component } from 'react';
 import saveAs from 'file-saver';
 import * as moment from 'moment-timezone';
-
-const electron = window.require('electron');
+import powerMonitor, { PowerMonitorEvent } from '../system/power-monitor';
+import createReport from '../report/createReport';
+import sessionCache from '../cache/session-cache';
 
 const EVENT_TYPE = Object.freeze({
   start: 'start',
@@ -27,13 +28,14 @@ type WorkTimeEvent = {
   reason: $Values<typeof REASON>
 };
 
-type WorkPeriod = {
+export type WorkPeriod = {
   startTime: string,
   endTime?: string
 };
 
 type Props = {};
-type State = {
+export type TimeTrackingSession = {
+  id: number,
   tracking: boolean,
   working: boolean,
   idleTime: number,
@@ -57,7 +59,8 @@ function stopEvent(
 function startEvent(timeStamp: string, reason: $Values<typeof REASON>) {
   return { timeStamp, type: EVENT_TYPE.start, reason };
 }
-const initialState: State = {
+const initialState: TimeTrackingSession = {
+  id: moment().startOf('day').milliseconds(),
   timeOutThresholdSec: 15,
   activeCheckerIntervalSec: 5,
   tracking: false,
@@ -71,25 +74,24 @@ const initialState: State = {
   setIdleOnLock: false
 };
 
-export default class WorkTimer extends Component<Props, State> {
+export default class WorkTimer extends Component<Props, TimeTrackingSession> {
   state = initialState;
 
   idleTimerId = undefined;
 
   componentDidMount() {
-    const persistedState = localStorage.getItem('workdays');
-    if (persistedState != null) {
-      const prevState = JSON.parse(persistedState);
-      this.init(prevState);
+    const todaysSession = sessionCache.get(moment().startOf('day').milliseconds());
+    if (todaysSession) {
+      this.init(todaysSession);
     }
   }
 
-  componentDidUpdate(prevProps: Props, prevState: State) {
-    if (prevState !== this.state) {
-      // todo: store per day
-      localStorage.setItem('workdays', JSON.stringify(this.state));
+  componentDidUpdate(prevProps: Props, prevState: TimeTrackingSession) {
+    if(prevState !== this.state) {
+      sessionCache.put(this.state)
     }
   }
+
 
   componentWillUnmount() {
     this.stopIdleChecker();
@@ -236,54 +238,25 @@ export default class WorkTimer extends Component<Props, State> {
 
   exportReport = () => {
     const { workPeriods } = this.state;
-    const dailyPeriods = workPeriods.reduce((reportPerDay, period) => {
-      const key = moment(period.startTime).format('YYYY-MM-DD');
-      reportPerDay[key] = reportPerDay[key]
-        ? [...reportPerDay[key], period]
-        : [period];
-      return reportPerDay;
-    }, {});
-
-    const workTimeReport = Object.keys(dailyPeriods).reduce(
-      (report, day) =>
-        `${report}${day}: ${dailyPeriods[day].reduce(
-          (dailyRaport, period) =>
-            dailyRaport +
-            moment(period.startTime)
-              .tz('Europe/Zurich')
-              .format('HHmm') +
-            '\t' +
-            moment(period.endTime)
-              .tz('Europe/Zurich')
-              .format('HHmm') +
-            '\t',
-          ''
-        )}` + '\n',
-      ''
-    );
-    const blob = new Blob([workTimeReport], {
-      type: 'text/plain;charset=utf-8'
-    });
+    const blob = createReport(workPeriods);
     saveAs(blob, 'worktimer-report.txt');
   };
 
-  checkIfIdle = () => {
-    electron.remote.powerMonitor.querySystemIdleTime(currentIdleTime => {
-      const { working, timeOutThresholdSec } = this.state;
-
-      this.setState({ idleTime: currentIdleTime });
-      if (working) {
-        if (currentIdleTime >= timeOutThresholdSec) {
-          this.setIdle(currentIdleTime);
-        } else {
-          this.setIdleCheckerWorkMode(currentIdleTime);
-        }
-      } else if (currentIdleTime <= timeOutThresholdSec) {
-        this.setActive(currentIdleTime);
+  checkIfIdle = async () => {
+    const currentIdleTime = await powerMonitor.getSystemIdleTime();
+    this.setState({ idleTime: currentIdleTime });
+    const { working, timeOutThresholdSec } = this.state;
+    if (working) {
+      if (currentIdleTime >= timeOutThresholdSec) {
+        this.setIdle(currentIdleTime);
       } else {
-        this.setIdleCheckerChillMode();
+        this.setIdleCheckerWorkMode(currentIdleTime);
       }
-    });
+    } else if (currentIdleTime <= timeOutThresholdSec) {
+      this.setActive(currentIdleTime);
+    } else {
+      this.setIdleCheckerChillMode();
+    }
   };
 
   setIdleCheckerChillMode = () => {
@@ -304,7 +277,7 @@ export default class WorkTimer extends Component<Props, State> {
     );
   };
 
-  init(state: State) {
+  init(state: TimeTrackingSession) {
     const { tracking, working, setIdleOnTimeOut, setIdleOnLock } = state;
     if (tracking) {
       if (setIdleOnTimeOut) {
@@ -322,8 +295,11 @@ export default class WorkTimer extends Component<Props, State> {
   }
 
   addLockListeners() {
-    electron.remote.powerMonitor.addListener('unlock-screen', this.setUnlocked);
-    electron.remote.powerMonitor.addListener('lock-screen', this.setLocked);
+    powerMonitor.addListeners(PowerMonitorEvent.lock_screen, this.setLocked);
+    powerMonitor.addListeners(
+      PowerMonitorEvent.unlock_screen,
+      this.setUnlocked
+    );
   }
 
   stopIdleChecker() {
@@ -331,11 +307,11 @@ export default class WorkTimer extends Component<Props, State> {
   }
 
   removeLockListeners() {
-    electron.remote.powerMonitor.removeListener(
-      'unlock-screen',
+    powerMonitor.removeListener(
+      PowerMonitorEvent.unlock_screen,
       this.setUnlocked
     );
-    electron.remote.powerMonitor.removeListener('lock-screen', this.setLocked);
+    powerMonitor.removeListener(PowerMonitorEvent.lock_screen, this.setLocked);
   }
 
   render() {
