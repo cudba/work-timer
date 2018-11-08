@@ -298,8 +298,8 @@ export default class WorkTimer extends Component<Props, State> {
   };
 
   addSuspendListeners() {
-    electron.remote.powerMonitor.addListener('suspend', this.setUnlocked);
-    electron.remote.powerMonitor.addListener('resume', this.setLocked);
+    electron.remote.powerMonitor.addListener('suspend', this.setSuspended);
+    electron.remote.powerMonitor.addListener('resume', this.setResumed);
   }
 
   removeSuspendListeners() {
