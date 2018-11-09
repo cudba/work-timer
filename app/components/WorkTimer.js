@@ -2,17 +2,20 @@
 import React, { Component } from 'react';
 import saveAs from 'file-saver';
 import * as moment from 'moment-timezone';
+import * as _ from 'lodash';
 import powerMonitor, { PowerMonitorEvent } from '../system/power-monitor';
 import createReport from '../report/createReport';
-import sessionCache from '../cache/session-cache';
+import workSessionCache from '../cache/work-session-cache';
 import tray from '../system/tray';
+import createWorkSession from '../work-session/createWorkSession';
+import createWorkPeriod from '../work-session/createWorkPeriod';
 
 const EVENT_TYPE = Object.freeze({
   start: 'start',
   stop: 'stop'
 });
 
-const REASON = Object.freeze({
+export const EventReason = Object.freeze({
   idle: 'idle',
   active: 'active',
   suspend: 'suspended',
@@ -26,66 +29,88 @@ const REASON = Object.freeze({
 type WorkTimeEvent = {
   timeStamp: string,
   type: $Values<typeof EVENT_TYPE>,
-  reason: $Values<typeof REASON>
+  reason: $Values<typeof EventReason>
 };
 
 export type WorkPeriod = {
+  id: string,
   startTime: string,
-  endTime?: string
+  startReason: $Values<typeof EventReason>,
+  endTime?: string,
+  endReason?: $Values<typeof EventReason>
 };
 
-type Props = {};
-export type TimeTrackingSession = {
-  id: number,
+export type WorkPeriods = {
+  [name: string]: WorkPeriod
+};
+
+export type WorkSession = {
+  id: string,
   tracking: boolean,
   working: boolean,
   idleTime: number,
-  events: WorkTimeEvent[],
+  workPeriods: WorkPeriods,
+  currentWorkPeriodId?: string
+};
+
+type Props = {};
+
+export const SettingsType = Object.freeze({
+  tracking: 'tracking',
+  idleOnTimeOut: 'idle-on-time-out',
+  idleOnLock: 'idle-on-lock',
+  timeOutThresholdSec: 'time-out-threshold-sec',
+  activeCheckerIntervalSec: 'active-checker-interval-sec',
+  showEvents: 'show-events',
+  autoLaunch: 'auth-launch'
+});
+
+export type WorkTimerSettings = {
+  tracking: boolean,
+  idleOnTimeOut: boolean,
+  idleOnLock: boolean,
   timeOutThresholdSec: number,
   activeCheckerIntervalSec: number,
-  workPeriods: WorkPeriod[],
-  currentWorkPeriod?: WorkPeriod,
   showEvents: boolean,
-  setIdleOnTimeOut: boolean,
-  setIdleOnLock: boolean,
-  autoLaunch: boolean,
+  autoLaunch: boolean
 };
+
+export type State = WorkTimerSettings & WorkSession;
 
 function stopEvent(
   timeStamp: string,
-  reason: $Values<typeof REASON>
+  reason: $Values<typeof EventReason>
 ): WorkTimeEvent {
   return { timeStamp, type: EVENT_TYPE.stop, reason };
 }
 
-function startEvent(timeStamp: string, reason: $Values<typeof REASON>) {
+function startEvent(timeStamp: string, reason: $Values<typeof EventReason>) {
   return { timeStamp, type: EVENT_TYPE.start, reason };
 }
-const initialState: TimeTrackingSession = {
-  id: moment()
-    .startOf('day')
-    .milliseconds(),
+const initialSettings: WorkTimerSettings = {
   timeOutThresholdSec: 15,
   activeCheckerIntervalSec: 5,
   tracking: false,
-  working: false,
-  idleTime: 0,
-  currentWorkPeriod: undefined,
-  workPeriods: [],
-  events: [],
   showEvents: false,
-  setIdleOnTimeOut: true,
-  setIdleOnLock: false,
-  autoLaunch: false,
+  idleOnTimeOut: true,
+  idleOnLock: false,
+  autoLaunch: false
 };
+const initialSession: WorkSession = createWorkSession();
 
-export default class WorkTimer extends Component<Props, TimeTrackingSession> {
+const initialState: State = {
+  ...initialSession,
+  ...initialSettings
+};
+const { Consumer, Provider } = React.createContext();
+
+export default class WorkTimer extends Component<Props, State> {
   state = initialState;
 
   idleTimerId = undefined;
 
   componentDidMount() {
-    const todaysSession = sessionCache.get(
+    const todaysSession = workSessionCache.get(
       moment()
         .startOf('day')
         .milliseconds()
@@ -93,13 +118,13 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     if (todaysSession) {
       this.init(todaysSession);
     } else {
-      this.init(this.state)
+      this.init(this.state);
     }
   }
 
-  componentDidUpdate(prevProps: Props, prevState: TimeTrackingSession) {
+  componentDidUpdate(prevProps: Props, prevState: State) {
     if (prevState !== this.state) {
-      sessionCache.put(this.state);
+      workSessionCache.put(this.state);
     }
   }
 
@@ -108,20 +133,44 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     this.removeLockListeners();
   }
 
+  changeSettings(setting: $Values<typeof SettingsType>, value: any) {
+    switch (setting) {
+      case SettingsType.idleOnTimeOut:
+        return this.updateIdleOnTimeOut(value);
+      case SettingsType.idleOnLock:
+        return this.updateIdleOnScreenLock(value);
+      case SettingsType.activeCheckerIntervalSec:
+        return this.setState({
+          activeCheckerIntervalSec: value
+        });
+      case SettingsType.timeOutThresholdSec:
+        return this.setState({
+          timeOutThresholdSec: value
+        });
+      case SettingsType.tracking:
+        return this.setTracking(value);
+      case SettingsType.showEvents:
+        return this.setState({ showEvents: value });
+      case SettingsType.autoLaunch:
+        return this.updateAutoLaunch(value);
+      default:
+    }
+  }
+
   onShowEventsChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     this.setState({
       showEvents: event.target.checked
     });
   };
 
-  onSetIdleOnTimeOutChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
-    const setIdleOnTimeOut = event.target.checked;
-    this.updateIdleOnTimeOut(setIdleOnTimeOut);
+  onidleOnTimeOutChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
+    const idleOnTimeOut = event.target.checked;
+    this.updateIdleOnTimeOut(idleOnTimeOut);
   };
 
-  onSetIdleOnLockChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
-    const setIdleOnLock = event.target.checked;
-    this.updateIdleOnScreenLock(setIdleOnLock);
+  onidleOnLockChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
+    const idleOnLock = event.target.checked;
+    this.updateIdleOnScreenLock(idleOnLock);
   };
 
   onIdleThresholdChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
@@ -138,89 +187,110 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     });
   };
 
-  onAutoLaunchChange = (
-    event: SyntheticInputEvent<HTMLInputElement>
-  ) => {
-    const autoLaunch = event.target.checked
+  onAutoLaunchChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
+    const autoLaunch = event.target.checked;
+    this.updateAutoLaunch(autoLaunch);
+  };
+
+  updateAutoLaunch(autoLaunch: boolean) {
     this.setState({
       autoLaunch
-    })
-    tray.setAutoLaunch(autoLaunch)
-}
+    });
+    tray.setAutoLaunch(autoLaunch);
+  }
 
   setLocked = () => {
     this.stopIdleChecker();
-    this.stopWorkPeriod(moment().toISOString(), REASON.lock);
+    this.stopWorkPeriod(moment().toISOString(), EventReason.lock);
   };
 
   setUnlocked = () => {
-    this.startWorkPeriod(moment().toISOString(), REASON.unlock);
-    this.setIdleChecker(true);
+    this.startWorkPeriod(moment().toISOString(), EventReason.unlock);
+    this.idleChecker(true);
   };
 
-  setIdle = (currentIdleTime: number) => {
+  idle = (currentIdleTime: number) => {
     this.stopWorkPeriod(
       moment()
         .subtract(currentIdleTime, 'seconds')
         .toISOString(),
-      REASON.idle
+      EventReason.idle
     );
-    this.setIdleChecker();
+    this.idleChecker();
   };
 
   setActive = (currentIdleTime: number) => {
-    this.startWorkPeriod(moment().toISOString(), REASON.active);
-    this.setIdleChecker(true, currentIdleTime);
+    this.startWorkPeriod(moment().toISOString(), EventReason.active);
+    this.idleChecker(true, currentIdleTime);
   };
 
-  setIdleChecker(workMode: boolean = false, currentIdleTime: number = 0) {
-    const { setIdleOnTimeOut } = this.state;
-    if (setIdleOnTimeOut) {
+  idleChecker(workMode: boolean = false, currentIdleTime: number = 0) {
+    const { idleOnTimeOut } = this.state;
+    if (idleOnTimeOut) {
       if (workMode) {
-        this.setIdleCheckerWorkMode(currentIdleTime);
+        this.idleCheckerWorkMode(currentIdleTime);
       } else {
-        this.setIdleCheckerChillMode();
+        this.idleCheckerChillMode();
       }
     }
   }
 
-  startWorkPeriod = (timeStamp: string, reason: $Values<typeof REASON>) => {
+  startWorkPeriod = (
+    timeStamp: string,
+    reason: $Values<typeof EventReason>
+  ) => {
+    const workPeriod = createWorkPeriod(reason);
     this.setState(prevState => ({
       tracking: true,
       working: true,
-      currentWorkPeriod: { startTime: timeStamp },
-      events: [...prevState.events, startEvent(timeStamp, reason)]
+      currentWorkPeriodId: workPeriod.id,
+      workPeriods: {
+        ...prevState.workPeriods,
+        [workPeriod.id]: workPeriod
+      }
     }));
   };
 
-  stopWorkPeriod = (timeStamp: string, reason: $Values<typeof REASON>) => {
+  stopWorkPeriod = (timeStamp: string, reason: $Values<typeof EventReason>) => {
     this.setState(prevState => {
-      const { workPeriods, currentWorkPeriod } = prevState;
-      if (currentWorkPeriod) {
+      const { workPeriods, currentWorkPeriodId } = prevState;
+      if (currentWorkPeriodId) {
         return {
           working: false,
-          workPeriods: [
-            ...workPeriods,
-            { startTime: currentWorkPeriod.startTime, endTime: timeStamp }
-          ],
-          currentWorkPeriod: undefined,
-          events: [...prevState.events, stopEvent(timeStamp, reason)]
+          workPeriods: {
+            ...prevState.workPeriods,
+            [currentWorkPeriodId]: _.merge(
+              {},
+              workPeriods[currentWorkPeriodId],
+              { endTime: timeStamp, endReason: reason }
+            )
+          },
+          currentWorkPeriodId: undefined
         };
       }
-      return {
-        working: false,
-        events: [...prevState.events, stopEvent(timeStamp, reason)]
-      };
+      return null;
     });
+  };
+
+  setTracking = (tracking: boolean) => {
+    if (this.state.tracking !== tracking) {
+      if (tracking) {
+        tray.setTracking(true);
+        this.startTracking();
+      } else {
+        this.stopTracking();
+        tray.setTracking(false);
+      }
+    }
   };
 
   toggleTracking = () => {
     const { tracking } = this.state;
     if (tracking) {
       this.stopTracking();
-      tray.setTracking(false)
+      tray.setTracking(false);
     } else {
-      tray.setTracking(true)
+      tray.setTracking(true);
       this.startTracking();
     }
   };
@@ -231,10 +301,14 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
   };
 
   exportReport = () => {
-    const { workPeriods } = this.state;
-    const blob = createReport(workPeriods);
+    const blob = createReport(this.getAllWorkPeriods());
     saveAs(blob, 'worktimer-report.txt');
   };
+
+  getAllWorkPeriods(): WorkPeriod[] {
+    const { workPeriods } = this.state;
+    return Object.keys(workPeriods).map(id => workPeriods[id]);
+  }
 
   checkIfIdle = async () => {
     const currentIdleTime = await powerMonitor.getSystemIdleTime();
@@ -242,18 +316,18 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     const { working, timeOutThresholdSec } = this.state;
     if (working) {
       if (currentIdleTime >= timeOutThresholdSec) {
-        this.setIdle(currentIdleTime);
+        this.idle(currentIdleTime);
       } else {
-        this.setIdleCheckerWorkMode(currentIdleTime);
+        this.idleCheckerWorkMode(currentIdleTime);
       }
     } else if (currentIdleTime <= timeOutThresholdSec) {
       this.setActive(currentIdleTime);
     } else {
-      this.setIdleCheckerChillMode();
+      this.idleCheckerChillMode();
     }
   };
 
-  setIdleCheckerChillMode = () => {
+  idleCheckerChillMode = () => {
     const { activeCheckerIntervalSec } = this.state;
     clearTimeout(this.idleTimerId);
     this.idleTimerId = setTimeout(
@@ -262,7 +336,7 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     );
   };
 
-  setIdleCheckerWorkMode = (currentIdleTime: number = 0) => {
+  idleCheckerWorkMode = (currentIdleTime: number = 0) => {
     const { timeOutThresholdSec } = this.state;
     clearTimeout(this.idleTimerId);
     this.idleTimerId = setTimeout(
@@ -280,80 +354,80 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
       }
     });
 
-    tray.onIdleOnTimeOutChange(setIdleOnTimeOut => {
-      this.updateIdleOnTimeOut(setIdleOnTimeOut);
+    tray.onIdleOnTimeOutChange(idleOnTimeOut => {
+      this.updateIdleOnTimeOut(idleOnTimeOut);
     });
 
-    tray.onIdleOnScreenLock(setIdleOnScreenLock => {
-      this.updateIdleOnScreenLock(setIdleOnScreenLock);
+    tray.onIdleOnScreenLock(idleOnScreenLock => {
+      this.updateIdleOnScreenLock(idleOnScreenLock);
     });
   }
 
-  updateIdleOnScreenLock(setIdleOnLock: boolean) {
+  updateIdleOnScreenLock(idleOnLock: boolean) {
     const { working } = this.state;
     if (working) {
-      if (setIdleOnLock) {
+      if (idleOnLock) {
         this.addLockListeners();
       } else {
         this.removeLockListeners();
       }
     }
     this.setState({
-      setIdleOnLock
+      idleOnLock
     });
-    tray.setIdleOnScreenLock(setIdleOnLock)
+    tray.setIdleOnScreenLock(idleOnLock);
   }
 
-  updateIdleOnTimeOut(setIdleOnTimeOut: boolean) {
+  updateIdleOnTimeOut(idleOnTimeOut: boolean) {
     const { working } = this.state;
     if (working) {
-      if (setIdleOnTimeOut) {
-        this.setIdleCheckerWorkMode();
+      if (idleOnTimeOut) {
+        this.idleCheckerWorkMode();
       } else {
         clearTimeout(this.idleTimerId);
       }
     }
     this.setState({
-      setIdleOnTimeOut
+      idleOnTimeOut
     });
-    tray.setIdleOnTimeOut(setIdleOnTimeOut)
+    tray.setIdleOnTimeOut(idleOnTimeOut);
   }
 
   startTracking() {
-    const { setIdleOnLock } = this.state;
-    if (setIdleOnLock) {
+    const { idleOnLock } = this.state;
+    if (idleOnLock) {
       this.addLockListeners();
     }
-    this.setIdleChecker(true);
-    this.startWorkPeriod(moment().toISOString(), REASON.user_action);
+    this.idleChecker(true);
+    this.startWorkPeriod(moment().toISOString(), EventReason.user_action);
     this.setState({ tracking: true });
   }
 
   stopTracking() {
     this.stopIdleChecker();
     this.removeLockListeners();
-    this.stopWorkPeriod(moment().toISOString(), REASON.user_action);
+    this.stopWorkPeriod(moment().toISOString(), EventReason.user_action);
     this.setState({ idleTime: 0, tracking: false });
   }
 
-  init(state: TimeTrackingSession) {
-    const { tracking, working, setIdleOnTimeOut, setIdleOnLock } = state;
+  init(state: State) {
+    const { tracking, working, idleOnTimeOut, idleOnLock } = state;
     if (tracking) {
-      if (setIdleOnTimeOut) {
+      if (idleOnTimeOut) {
         if (working) {
-          this.setIdleCheckerWorkMode();
+          this.idleCheckerWorkMode();
         } else {
-          this.setIdleCheckerChillMode();
+          this.idleCheckerChillMode();
         }
       }
-      if (setIdleOnLock) {
+      if (idleOnLock) {
         this.addLockListeners();
       }
     }
-    if(this.state !== state) {
+    if (this.state !== state) {
       this.setState(state);
     }
-    tray.sync(tracking, setIdleOnTimeOut, setIdleOnLock);
+    tray.sync(tracking, idleOnTimeOut, idleOnLock);
     this.registerTrayListeners();
   }
 
@@ -381,64 +455,46 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     const {
       idleTime,
       working,
-      events,
       tracking,
       activeCheckerIntervalSec,
       timeOutThresholdSec,
       workPeriods,
-      currentWorkPeriod,
+      currentWorkPeriodId,
       showEvents,
-      setIdleOnLock,
-      setIdleOnTimeOut,
-      autoLaunch,
+      idleOnLock,
+      idleOnTimeOut,
+      autoLaunch
     } = this.state;
     return (
-      <>
-        <div style={{ fontSize: 12, position: 'absolute', right: 0, top: 0 }}>
-          <div>tracking: {String(tracking)}</div>
-          <div>state: {working ? 'working' : 'chilling'}</div>
-          <div>Idle time: {idleTime}</div>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            height: '95vh',
-            fontSize: 14,
-            paddingTop: 20
-          }}
-        >
-          <div>
+      <Provider value={this.state}>
+        <>
+          <div style={{ fontSize: 12, position: 'absolute', right: 0, top: 0 }}>
+            <div>tracking: {String(tracking)}</div>
+            <div>state: {working ? 'working' : 'chilling'}</div>
+            <div>Idle time: {idleTime}</div>
+          </div>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              height: '95vh',
+              fontSize: 14,
+              paddingTop: 20
+            }}
+          >
             <div>
               <div>
-                <input
-                  type="checkbox"
-                  checked={setIdleOnTimeOut}
-                  onChange={this.onSetIdleOnTimeOutChange}
-                />
-                set idle on time out
-              </div>
-              <div>
-                {setIdleOnTimeOut ? (
-                  <>
-                    <div
-                      style={{
-                        display: 'inline-block',
-                        marginRight: 10,
-                        marginTop: 10
-                      }}
-                    >
-                      <input
-                        style={{ width: 40 }}
-                        type="number"
-                        value={timeOutThresholdSec}
-                        onChange={this.onIdleThresholdChange}
-                      />
-                    </div>
-                    <div style={{ display: 'inline-block' }}>
-                      Time in seconds after you will be set to idle
-                    </div>
-                    <div>
+                <div>
+                  <input
+                    type="checkbox"
+                    checked={idleOnTimeOut}
+                    onChange={this.onidleOnTimeOutChange}
+                  />
+                  set idle on time out
+                </div>
+                <div>
+                  {idleOnTimeOut ? (
+                    <>
                       <div
                         style={{
                           display: 'inline-block',
@@ -449,131 +505,120 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
                         <input
                           style={{ width: 40 }}
                           type="number"
-                          value={activeCheckerIntervalSec}
-                          onChange={this.onActiveCheckerIntervalChange}
+                          value={timeOutThresholdSec}
+                          onChange={this.onIdleThresholdChange}
                         />
                       </div>
                       <div style={{ display: 'inline-block' }}>
-                        Interval in seconds to check for user activity in idle
-                        state
+                        Time in seconds after you will be set to idle
                       </div>
-                    </div>
-                  </>
+                      <div>
+                        <div
+                          style={{
+                            display: 'inline-block',
+                            marginRight: 10,
+                            marginTop: 10
+                          }}
+                        >
+                          <input
+                            style={{ width: 40 }}
+                            type="number"
+                            value={activeCheckerIntervalSec}
+                            onChange={this.onActiveCheckerIntervalChange}
+                          />
+                        </div>
+                        <div style={{ display: 'inline-block' }}>
+                          Interval in seconds to check for user activity in idle
+                          state
+                        </div>
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              </div>
+              <div style={{ margin: '20px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={idleOnLock}
+                  onChange={this.onidleOnLockChange}
+                />
+                set idle on screen lock / suspense{' '}
+                <span style={{ fontSize: 12 }}>
+                  (Suspending the pc also triggers a lock / unlock event)
+                </span>
+                <div style={{ fontSize: 12, margin: '5px 10px' }}>
+                  Note: If unchecked, idle-on-time-out rules apply
+                </div>
+              </div>
+              <div style={{ margin: '20px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={autoLaunch}
+                  onChange={this.onAutoLaunchChange}
+                />
+                launch on system start
+              </div>
+              <div style={{ margin: '20px 0' }}>
+                <input
+                  type="checkbox"
+                  checked={showEvents}
+                  onChange={this.onShowEventsChange}
+                />
+                show events
+              </div>
+            </div>
+            <div style={{ marginTop: 10 }}>
+              <button type="button" onClick={this.toggleTracking}>
+                {tracking ? 'stop tracking' : 'start tracking'}
+              </button>
+              <button type="button" onClick={this.exportReport}>
+                export
+              </button>
+              <button type="button" onClick={this.clear}>
+                clear
+              </button>
+            </div>
+            <div style={{ marginTop: 40 }}>Work periods:</div>
+            <div style={{ flex: 1, marginTop: 20, position: 'relative' }}>
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  overflow: 'auto'
+                }}
+              >
+                {this.getAllWorkPeriods().map(workPeriod => (
+                  <div key={workPeriod.startTime}>
+                    start time:{' '}
+                    {moment(workPeriod.startTime)
+                      .tz('Europe/Zurich')
+                      .format('YYYY-MM-DD HH:mm')}
+                    <br />
+                    end time:{' '}
+                    {moment(workPeriod.endTime)
+                      .tz('Europe/Zurich')
+                      .format('YYYY-MM-DD HH:mm')}
+                    <div>-----------------------------</div>
+                  </div>
+                ))}
+                {currentWorkPeriodId ? (
+                  <div>
+                    start time:{' '}
+                    {moment(workPeriods[currentWorkPeriodId].startTime)
+                      .tz('Europe/Zurich')
+                      .format('YYYY-MM-DD HH:mm')}
+                    <br />
+                    end time: running
+                  </div>
                 ) : null}
               </div>
             </div>
-            <div style={{ margin: '20px 0' }}>
-              <input
-                type="checkbox"
-                checked={setIdleOnLock}
-                onChange={this.onSetIdleOnLockChange}
-              />
-              set idle on screen lock / suspense{' '}
-              <span style={{ fontSize: 12 }}>
-                (Suspending the pc also triggers a lock / unlock event)
-              </span>
-              <div style={{ fontSize: 12, margin: '5px 10px' }}>
-                Note: If unchecked, idle-on-time-out rules apply
-              </div>
-            </div>
-            <div style={{ margin: '20px 0' }}>
-              <input
-                type="checkbox"
-                checked={autoLaunch}
-                onChange={this.onAutoLaunchChange}
-              />
-              launch on system start
-            </div>
-            <div style={{ margin: '20px 0' }}>
-              <input
-                type="checkbox"
-                checked={showEvents}
-                onChange={this.onShowEventsChange}
-              />
-              show events
-            </div>
           </div>
-          <div style={{ marginTop: 10 }}>
-            <button type="button" onClick={this.toggleTracking}>
-              {tracking ? 'stop tracking' : 'start tracking'}
-            </button>
-            <button type="button" onClick={this.exportReport}>
-              export
-            </button>
-            <button type="button" onClick={this.clear}>
-              clear
-            </button>
-          </div>
-          <div style={{ marginTop: 40 }}>Work periods:</div>
-          <div style={{ flex: 1, marginTop: 20, position: 'relative' }}>
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                overflow: 'auto'
-              }}
-            >
-              {workPeriods.map(workPeriod => (
-                <div key={workPeriod.startTime}>
-                  start time:{' '}
-                  {moment(workPeriod.startTime)
-                    .tz('Europe/Zurich')
-                    .format('YYYY-MM-DD HH:mm')}
-                  <br />
-                  end time:{' '}
-                  {moment(workPeriod.endTime)
-                    .tz('Europe/Zurich')
-                    .format('YYYY-MM-DD HH:mm')}
-                  <div>-----------------------------</div>
-                </div>
-              ))}
-              {currentWorkPeriod ? (
-                <div>
-                  start time:{' '}
-                  {moment(currentWorkPeriod.startTime)
-                    .tz('Europe/Zurich')
-                    .format('YYYY-MM-DD HH:mm')}
-                  <br />
-                  end time: running
-                </div>
-              ) : null}
-            </div>
-          </div>
-          {showEvents ? (
-            <>
-              <div style={{ marginTop: 40 }}>Events:</div>
-              <div style={{ flex: 1, marginTop: 20, position: 'relative' }}>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    overflow: 'auto'
-                  }}
-                >
-                  {events.map(event => (
-                    <div key={event.timeStamp}>
-                      type: {event.type} <br />
-                      time:{' '}
-                      {moment(event.timeStamp)
-                        .tz('Europe/Zurich')
-                        .format('YYYY-MM-DD HH:mm:ss')}
-                      <br />
-                      reason: {event.reason}
-                      <div>-----------------------------</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : null}
-        </div>
-      </>
+        </>
+      </Provider>
     );
   }
 }
