@@ -60,6 +60,11 @@ module.exports = api => {
       require('@babel/plugin-syntax-import-meta'),
       [require('@babel/plugin-proposal-class-properties'), { loose: true }],
       require('@babel/plugin-proposal-json-strings'),
+      require("babel-plugin-inline-import-data-uri"),
+      // ["transform-assets", {
+      //   "extensions": ["png", "jpg", "svg"],
+      //   "name": "[name].[ext]?[sha512:hash:base64:7]",
+      // }],
 
       ...(development ? developmentPlugins : productionPlugins)
     ]

@@ -10,17 +10,38 @@
  *
  * @flow
  */
-import path from 'path';
-import { app, BrowserWindow, Tray, Menu, ipcMain } from 'electron';
+
+import AutoLaunch from 'auto-launch';
+import { app, BrowserWindow, Tray, Menu, ipcMain, nativeImage } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
+import trayIcon from './tray_icon.png';
+import trayIconRecording from './tray_icon_recording.png';
+
+const idleIcon = nativeImage.createFromDataURL(trayIcon);
+const trackingIcon = nativeImage.createFromDataURL(trayIconRecording);
+
+const startMinimized = (process.argv || []).indexOf('--hidden') !== -1;
 
 export default class AppUpdater {
   constructor() {
     log.transports.file.level = 'info';
     autoUpdater.logger = log;
     autoUpdater.checkForUpdatesAndNotify();
+  }
+}
+
+const workTimerAutoLauncher = new AutoLaunch({
+  name: 'Work Timer',
+  path: '/Applications/WorkTimer.app --hidden'
+});
+
+function setAutoLaunch(enabled: boolean) {
+  if (enabled) {
+    workTimerAutoLauncher.enable();
+  } else {
+    workTimerAutoLauncher.disable();
   }
 }
 
@@ -71,7 +92,7 @@ const contextMenuTemplate = [
   {
     label: 'Exit',
     click: () => {
-      app.isQuiting = true
+      app.isQuiting = true;
       app.quit();
     }
   }
@@ -80,9 +101,9 @@ const contextMenuTemplate = [
 function setTracking(tracking) {
   trayContextMenu.items[0].checked = tracking;
   if (tracking) {
-    tray.setImage(path.join(__dirname, 'tray_icon_recording.png'));
+    tray.setImage(trackingIcon);
   } else {
-    tray.setImage(path.join(__dirname, 'tray_icon.png'));
+    tray.setImage(idleIcon);
   }
   tray.setContextMenu(trayContextMenu);
 }
@@ -126,9 +147,9 @@ const installExtensions = async () => {
 app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
-  // if (process.platform !== 'darwin') {
-  //   app.quit();
-  // }
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
 function attachRendererListeners() {
@@ -150,6 +171,9 @@ function attachRendererListeners() {
   ipcMain.on('set-idle-on-screen-lock', (event, idleOnTimeOut) => {
     setIdleOnTimeOut(idleOnTimeOut);
   });
+  ipcMain.on('set-auto-launch', (event, autoLaunch: boolean) => {
+    setAutoLaunch(autoLaunch);
+  });
 }
 
 app.on('ready', async () => {
@@ -166,7 +190,7 @@ app.on('ready', async () => {
     height: 728
   });
 
-  tray = new Tray(path.join(__dirname, 'tray_icon.png'));
+  tray = new Tray(idleIcon);
 
   trayContextMenu = Menu.buildFromTemplate(contextMenuTemplate);
 
@@ -182,7 +206,7 @@ app.on('ready', async () => {
     if (!mainWindow) {
       throw new Error('"mainWindow" is not defined');
     }
-    if (process.env.START_MINIMIZED) {
+    if (process.env.START_MINIMIZED || startMinimized) {
       mainWindow.minimize();
     } else {
       mainWindow.show();

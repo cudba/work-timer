@@ -32,5 +32,8 @@ export default {
       idleOnTimeOut,
       idleOnScreenLock
     });
+  },
+  setAutoLaunch(autoLaunch: boolean) {
+    ipcRenderer.send('set-auto-launch', autoLaunch);
   }
 };

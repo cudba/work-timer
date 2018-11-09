@@ -1,6 +1,6 @@
 {
   "name": "work-timer",
-  "productName": "Work Timer",
+  "productName": "WorkTimer",
   "version": "0.0.1",
   "description": "Tracks your worktime",
   "scripts": {
@@ -153,6 +153,8 @@
     "babel-jest": "^23.6.0",
     "babel-loader": "^8.0.4",
     "babel-plugin-dev-expression": "^0.2.1",
+    "babel-plugin-inline-import-data-uri": "^1.0.1",
+    "babel-plugin-transform-assets": "^1.0.2",
     "babel-plugin-transform-react-remove-prop-types": "^0.4.19",
     "chalk": "^2.4.1",
     "concurrently": "^3.6.1",
@@ -219,6 +221,7 @@
   },
   "dependencies": {
     "@fortawesome/fontawesome-free": "^5.2.0",
+    "auto-launch": "^5.0.5",
     "devtron": "^1.4.0",
     "electron-debug": "^2.0.0",
     "electron-log": "^2.2.17",

@@ -47,7 +47,8 @@ export type TimeTrackingSession = {
   currentWorkPeriod?: WorkPeriod,
   showEvents: boolean,
   setIdleOnTimeOut: boolean,
-  setIdleOnLock: boolean
+  setIdleOnLock: boolean,
+  autoLaunch: boolean,
 };
 
 function stopEvent(
@@ -74,7 +75,8 @@ const initialState: TimeTrackingSession = {
   events: [],
   showEvents: false,
   setIdleOnTimeOut: true,
-  setIdleOnLock: false
+  setIdleOnLock: false,
+  autoLaunch: false,
 };
 
 export default class WorkTimer extends Component<Props, TimeTrackingSession> {
@@ -135,6 +137,16 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
       activeCheckerIntervalSec: parseInt(event.target.value, 10) || 0
     });
   };
+
+  onAutoLaunchChange = (
+    event: SyntheticInputEvent<HTMLInputElement>
+  ) => {
+    const autoLaunch = event.target.checked
+    this.setState({
+      autoLaunch
+    })
+    tray.setAutoLaunch(autoLaunch)
+}
 
   setLocked = () => {
     this.stopIdleChecker();
@@ -377,7 +389,8 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
       currentWorkPeriod,
       showEvents,
       setIdleOnLock,
-      setIdleOnTimeOut
+      setIdleOnTimeOut,
+      autoLaunch,
     } = this.state;
     return (
       <>
@@ -462,6 +475,14 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
               <div style={{ fontSize: 12, margin: '5px 10px' }}>
                 Note: If unchecked, idle-on-time-out rules apply
               </div>
+            </div>
+            <div style={{ margin: '20px 0' }}>
+              <input
+                type="checkbox"
+                checked={autoLaunch}
+                onChange={this.onAutoLaunchChange}
+              />
+              launch on system start
             </div>
             <div style={{ margin: '20px 0' }}>
               <input
