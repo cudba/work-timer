@@ -10,7 +10,8 @@
  *
  * @flow
  */
-import { app, BrowserWindow } from 'electron';
+import path from 'path';
+import { app, BrowserWindow, Tray, Menu, ipcMain } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import log from 'electron-log';
 import MenuBuilder from './menu';
@@ -24,6 +25,77 @@ export default class AppUpdater {
 }
 
 let mainWindow = null;
+let tray = null;
+let trayContextMenu = null;
+
+const contextMenuTemplate = [
+  {
+    label: 'Record',
+    type: 'checkbox',
+    checked: false,
+    click: menuItem => {
+      const track = menuItem.checked;
+      mainWindow.webContents.send('on-tracking-change', track);
+      setTracking(track);
+    }
+  },
+  {
+    label: 'Idle Settings',
+    submenu: [
+      {
+        label: 'time out',
+        type: 'checkbox',
+        click: menuItem => {
+          const checked = menuItem.checked;
+          mainWindow.webContents.send('on-idle-on-time-out-change', checked);
+        }
+      },
+
+      {
+        label: 'screen lock',
+        type: 'checkbox',
+        click: menuItem => {
+          const checked = menuItem.checked;
+          mainWindow.webContents.send('on-idle-on-screen-lock-change', checked);
+        }
+      }
+    ]
+  },
+  {
+    label: 'Open',
+    click: () => {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  },
+  {
+    label: 'Exit',
+    click: () => {
+      app.isQuiting = true
+      app.quit();
+    }
+  }
+];
+
+function setTracking(tracking) {
+  trayContextMenu.items[0].checked = tracking;
+  if (tracking) {
+    tray.setImage(path.join(__dirname, 'tray_icon_recording.png'));
+  } else {
+    tray.setImage(path.join(__dirname, 'tray_icon.png'));
+  }
+  tray.setContextMenu(trayContextMenu);
+}
+
+function setIdleOnTimeOut(idleOnTimeOut: boolean) {
+  trayContextMenu.items[1].submenu.items[0].checked = idleOnTimeOut;
+  tray.setContextMenu(trayContextMenu);
+}
+
+function setIdleOnScreenLock(idleOnScreenLock: boolean) {
+  trayContextMenu.items[1].submenu.items[1].checked = idleOnScreenLock;
+  tray.setContextMenu(trayContextMenu);
+}
 
 if (process.env.NODE_ENV === 'production') {
   const sourceMapSupport = require('source-map-support');
@@ -54,10 +126,31 @@ const installExtensions = async () => {
 app.on('window-all-closed', () => {
   // Respect the OSX convention of having the application in memory even
   // after all windows have been closed
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  // if (process.platform !== 'darwin') {
+  //   app.quit();
+  // }
 });
+
+function attachRendererListeners() {
+  ipcMain.on(
+    'sync-tray',
+    (event, { tracking, idleOnTimeOut, idleOnScreenLock }) => {
+      setTracking(tracking);
+      setIdleOnTimeOut(idleOnTimeOut);
+      setIdleOnScreenLock(idleOnScreenLock);
+    }
+  );
+
+  ipcMain.on('set-tracking', (event, tracking) => {
+    setTracking(tracking);
+  });
+  ipcMain.on('set-idle-on-time-out', (event, idleOnTimeOut) => {
+    setIdleOnTimeOut(idleOnTimeOut);
+  });
+  ipcMain.on('set-idle-on-screen-lock', (event, idleOnTimeOut) => {
+    setIdleOnTimeOut(idleOnTimeOut);
+  });
+}
 
 app.on('ready', async () => {
   if (
@@ -72,6 +165,14 @@ app.on('ready', async () => {
     width: 1024,
     height: 728
   });
+
+  tray = new Tray(path.join(__dirname, 'tray_icon.png'));
+
+  trayContextMenu = Menu.buildFromTemplate(contextMenuTemplate);
+
+  tray.setToolTip('Work Timer');
+  tray.setContextMenu(trayContextMenu);
+  attachRendererListeners();
 
   mainWindow.loadURL(`file://${__dirname}/app.html`);
 
@@ -89,9 +190,23 @@ app.on('ready', async () => {
     }
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  mainWindow.on('minimize', event => {
+    event.preventDefault();
+    mainWindow.hide();
   });
+
+  mainWindow.on('close', event => {
+    if (!app.isQuiting) {
+      event.preventDefault();
+      mainWindow.hide();
+    }
+
+    return false;
+  });
+  // mainWindow.on('closed', () => {
+  //   console.log('on close')
+  //   mainWindow = null;
+  // });
 
   const menuBuilder = new MenuBuilder(mainWindow);
   menuBuilder.buildMenu();

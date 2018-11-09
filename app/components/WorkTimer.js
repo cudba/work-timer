@@ -5,6 +5,7 @@ import * as moment from 'moment-timezone';
 import powerMonitor, { PowerMonitorEvent } from '../system/power-monitor';
 import createReport from '../report/createReport';
 import sessionCache from '../cache/session-cache';
+import tray from '../system/tray';
 
 const EVENT_TYPE = Object.freeze({
   start: 'start',
@@ -60,7 +61,9 @@ function startEvent(timeStamp: string, reason: $Values<typeof REASON>) {
   return { timeStamp, type: EVENT_TYPE.start, reason };
 }
 const initialState: TimeTrackingSession = {
-  id: moment().startOf('day').milliseconds(),
+  id: moment()
+    .startOf('day')
+    .milliseconds(),
   timeOutThresholdSec: 15,
   activeCheckerIntervalSec: 5,
   tracking: false,
@@ -80,18 +83,23 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
   idleTimerId = undefined;
 
   componentDidMount() {
-    const todaysSession = sessionCache.get(moment().startOf('day').milliseconds());
+    const todaysSession = sessionCache.get(
+      moment()
+        .startOf('day')
+        .milliseconds()
+    );
     if (todaysSession) {
       this.init(todaysSession);
+    } else {
+      this.init(this.state)
     }
   }
 
   componentDidUpdate(prevProps: Props, prevState: TimeTrackingSession) {
-    if(prevState !== this.state) {
-      sessionCache.put(this.state)
+    if (prevState !== this.state) {
+      sessionCache.put(this.state);
     }
   }
-
 
   componentWillUnmount() {
     this.stopIdleChecker();
@@ -106,32 +114,12 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
 
   onSetIdleOnTimeOutChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     const setIdleOnTimeOut = event.target.checked;
-    const { working } = this.state;
-    if (working) {
-      if (setIdleOnTimeOut) {
-        this.setIdleCheckerWorkMode();
-      } else {
-        clearTimeout(this.idleTimerId);
-      }
-    }
-    this.setState({
-      setIdleOnTimeOut
-    });
+    this.updateIdleOnTimeOut(setIdleOnTimeOut);
   };
 
   onSetIdleOnLockChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     const setIdleOnLock = event.target.checked;
-    const { working } = this.state;
-    if (working) {
-      if (setIdleOnLock) {
-        this.addLockListeners();
-      } else {
-        this.removeLockListeners();
-      }
-    }
-    this.setState({
-      setIdleOnLock
-    });
+    this.updateIdleOnScreenLock(setIdleOnLock);
   };
 
   onIdleThresholdChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
@@ -215,19 +203,13 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
   };
 
   toggleTracking = () => {
-    const { tracking, setIdleOnLock } = this.state;
+    const { tracking } = this.state;
     if (tracking) {
-      this.stopIdleChecker();
-      this.removeLockListeners();
-      this.stopWorkPeriod(moment().toISOString(), REASON.user_action);
-      this.setState({ idleTime: 0, tracking: false });
+      this.stopTracking();
+      tray.setTracking(false)
     } else {
-      if (setIdleOnLock) {
-        this.addLockListeners();
-      }
-      this.setIdleChecker(true);
-      this.startWorkPeriod(moment().toISOString(), REASON.user_action);
-      this.setState({ tracking: true });
+      tray.setTracking(true)
+      this.startTracking();
     }
   };
 
@@ -277,6 +259,71 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
     );
   };
 
+  registerTrayListeners() {
+    tray.onTrackingChange(track => {
+      if (track) {
+        this.startTracking();
+      } else {
+        this.stopTracking();
+      }
+    });
+
+    tray.onIdleOnTimeOutChange(setIdleOnTimeOut => {
+      this.updateIdleOnTimeOut(setIdleOnTimeOut);
+    });
+
+    tray.onIdleOnScreenLock(setIdleOnScreenLock => {
+      this.updateIdleOnScreenLock(setIdleOnScreenLock);
+    });
+  }
+
+  updateIdleOnScreenLock(setIdleOnLock: boolean) {
+    const { working } = this.state;
+    if (working) {
+      if (setIdleOnLock) {
+        this.addLockListeners();
+      } else {
+        this.removeLockListeners();
+      }
+    }
+    this.setState({
+      setIdleOnLock
+    });
+    tray.setIdleOnScreenLock(setIdleOnLock)
+  }
+
+  updateIdleOnTimeOut(setIdleOnTimeOut: boolean) {
+    const { working } = this.state;
+    if (working) {
+      if (setIdleOnTimeOut) {
+        this.setIdleCheckerWorkMode();
+      } else {
+        clearTimeout(this.idleTimerId);
+      }
+    }
+    this.setState({
+      setIdleOnTimeOut
+    });
+    tray.setIdleOnTimeOut(setIdleOnTimeOut)
+  }
+
+  startTracking() {
+    const { setIdleOnLock } = this.state;
+    if (setIdleOnLock) {
+      this.addLockListeners();
+    }
+    this.setIdleChecker(true);
+    this.startWorkPeriod(moment().toISOString(), REASON.user_action);
+    this.setState({ tracking: true });
+  }
+
+  stopTracking() {
+    this.stopIdleChecker();
+    this.removeLockListeners();
+    this.stopWorkPeriod(moment().toISOString(), REASON.user_action);
+    this.setState({ idleTime: 0, tracking: false });
+  }
+
   init(state: TimeTrackingSession) {
     const { tracking, working, setIdleOnTimeOut, setIdleOnLock } = state;
     if (tracking) {
@@ -291,7 +338,11 @@ export default class WorkTimer extends Component<Props, TimeTrackingSession> {
         this.addLockListeners();
       }
     }
-    this.setState(state);
+    if(this.state !== state) {
+      this.setState(state);
+    }
+    tray.sync(tracking, setIdleOnTimeOut, setIdleOnLock);
+    this.registerTrayListeners();
   }
 
   addLockListeners() {
