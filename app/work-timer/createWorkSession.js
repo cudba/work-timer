@@ -1,10 +1,10 @@
 // @flow
 import moment from 'moment';
-import type { WorkSession } from '../components/WorkSessionProvider';
+import type { WorkSession } from './WorkTimeProvider';
 
 export default function(): WorkSession {
   return {
-    id: moment()
+    sessionId: moment()
       .startOf('day')
       .toISOString(),
     tracking: true,
