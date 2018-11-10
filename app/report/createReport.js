@@ -1,7 +1,7 @@
 // @flow
-import * as moment from 'moment-timezone';
+import  moment from 'moment-timezone';
 
-import type { WorkPeriod } from '../components/WorkTimer';
+import type { WorkPeriod } from '../components/WorkSessionProvider';
 
 export default function createReport(workPeriods: WorkPeriod[]) {
   const dailyPeriods = workPeriods.reduce((reportPerDay, period) => {

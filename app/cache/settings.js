@@ -1,4 +1,4 @@
-import type { WorkTimerSettings } from '../components/WorkTimer';
+import type { WorkTimerSettings } from '../components/WorkSessionProvider';
 
 const key = 'worktimer-settings';
 export default {

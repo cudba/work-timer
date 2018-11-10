@@ -34,7 +34,8 @@ export default class AppUpdater {
 
 const workTimerAutoLauncher = new AutoLaunch({
   name: 'Work Timer',
-  path: '/Applications/WorkTimer.app --hidden'
+  path: '/Applications/WorkTimer.app',
+  isHidden: true
 });
 
 function setAutoLaunch(enabled: boolean) {
@@ -45,9 +46,9 @@ function setAutoLaunch(enabled: boolean) {
   }
 }
 
-let mainWindow = null;
-let tray = null;
-let trayContextMenu = null;
+let mainWindow;
+let tray ;
+let trayContextMenu;
 
 const contextMenuTemplate = [
   {

@@ -1,7 +1,7 @@
 // @flow
 import React, { Component } from 'react';
 import saveAs from 'file-saver';
-import * as moment from 'moment-timezone';
+import moment from 'moment-timezone';
 import * as _ from 'lodash';
 import powerMonitor, { PowerMonitorEvent } from '../system/power-monitor';
 import createReport from '../report/createReport';
@@ -77,16 +77,6 @@ export type WorkTimerSettings = {
 
 export type State = WorkTimerSettings & WorkSession;
 
-function stopEvent(
-  timeStamp: string,
-  reason: $Values<typeof EventReason>
-): WorkTimeEvent {
-  return { timeStamp, type: EVENT_TYPE.stop, reason };
-}
-
-function startEvent(timeStamp: string, reason: $Values<typeof EventReason>) {
-  return { timeStamp, type: EVENT_TYPE.start, reason };
-}
 const initialSettings: WorkTimerSettings = {
   timeOutThresholdSec: 15,
   activeCheckerIntervalSec: 5,
@@ -104,7 +94,7 @@ const initialState: State = {
 };
 const { Consumer, Provider } = React.createContext();
 
-export default class WorkTimer extends Component<Props, State> {
+export default class WorkSessionProvider extends Component<Props, State> {
   state = initialState;
 
   idleTimerId = undefined;

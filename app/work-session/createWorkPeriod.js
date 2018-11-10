@@ -1,7 +1,7 @@
 // @flow
-import * as moment from 'moment';
-import { EventReason } from '../components/WorkTimer';
-import type { WorkPeriod } from '../components/WorkTimer';
+import moment from 'moment';
+import { EventReason } from '../components/WorkSessionProvider';
+import type { WorkPeriod } from '../components/WorkSessionProvider';
 
 export default function(reason: $Values<typeof EventReason>): WorkPeriod {
   return {

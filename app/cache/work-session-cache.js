@@ -1,7 +1,7 @@
 // @flow
 
 
-import type { State } from '../components/WorkTimer';
+import type { State } from '../components/WorkSessionProvider';
 
 const key = 'work-periods';
 

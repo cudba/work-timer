@@ -1,6 +1,6 @@
 // @flow
-import * as moment from 'moment';
-import type { WorkSession } from '../components/WorkTimer';
+import moment from 'moment';
+import type { WorkSession } from '../components/WorkSessionProvider';
 
 export default function(): WorkSession {
   return {
