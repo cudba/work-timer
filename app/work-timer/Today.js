@@ -1,18 +1,25 @@
 import React from 'react';
-import moment from 'moment-timezone';
-import { WorkTimeConsumer } from './WorkTimeProvider';
+import IconButton from '@material-ui/core/IconButton';
+import StartTrackingIcon from '@material-ui/icons/PlayCircleOutline';
+import StopTrackingIcon from '@material-ui/icons/PauseCircleOutline';
+import { WorkTimeConsumer } from './WorkSessionProvider';
+import WorkPeriodsTable from './WorkPeriodsTable';
+import Typography from '@material-ui/core/Typography';
 
 class Today extends React.Component {
   render() {
     return (
       <WorkTimeConsumer>
         {({
-      tracking,
-      working,
-      workPeriods,
-      setTracking,
+          tracking,
+          working,
+          workPeriods,
+          updateWorkPeriod,
+          mergeWorkPeriods,
+          deleteWorkPeriod,
+          setTracking,
           clearCurrentSession
-    }) => (
+        }) => (
           <div
             style={{
               display: 'flex',
@@ -22,15 +29,15 @@ class Today extends React.Component {
               paddingTop: 20
             }}
           >
-            <div style={{ marginTop: 10 }}>
-              <button type="button" onClick={() => setTracking(!tracking)}>
-                {tracking ? 'stop tracking' : 'start tracking'}
-              </button>
-              <button type="button" onClick={clearCurrentSession}>
-                clear
-              </button>
+            <div style={{ margin: '10px auto' }}>
+              <IconButton onClick={() => setTracking(!tracking)}>
+                {tracking ? (
+                  <StopTrackingIcon style={{ fontSize: 80 }} />
+                ) : (
+                  <StartTrackingIcon style={{ fontSize: 80 }} />
+                )}
+              </IconButton>
             </div>
-            <div style={{ marginTop: 40 }}>Work periods:</div>
             <div style={{ flex: 1, marginTop: 20, position: 'relative' }}>
               <div
                 style={{
@@ -42,21 +49,13 @@ class Today extends React.Component {
                   overflow: 'auto'
                 }}
               >
-                {workPeriods.map(workPeriod => (
-                  <div key={workPeriod.startTime}>
-                    {`start time: ${moment(workPeriod.startTime)
-                      .tz('Europe/Zurich')
-                      .format('YYYY-MM-DD HH:mm')} (reason: ${workPeriod.startReason})`}
-                    <br />
-                    {
-                      workPeriod.endTime ? `end time: ${moment(workPeriod.endTime)
-                      .tz('Europe/Zurich')
-                      .format('YYYY-MM-DD HH:mm')} (reason: ${workPeriod.startReason})` : 'running'
-
-                    }
-                    <div>-----------------------------</div>
-                  </div>
-                ))}
+                <WorkPeriodsTable
+                  workPeriods={workPeriods}
+                  updateWorkPeriod={updateWorkPeriod}
+                  mergeWorkPeriods={mergeWorkPeriods}
+                  deleteWorkPeriod={deleteWorkPeriod}
+                  clear={clearCurrentSession}
+                />
               </div>
             </div>
           </div>

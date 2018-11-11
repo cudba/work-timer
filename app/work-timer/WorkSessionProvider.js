@@ -13,7 +13,7 @@ import createWorkPeriod from './createWorkPeriod';
 import workSessionSettings from '../cache/work-session-settings';
 
 export const EventReason = Object.freeze({
-  idle: 'idle',
+  timeOut: 'timeOut',
   active: 'active',
   suspend: 'suspended',
   lock: 'locked',
@@ -28,7 +28,8 @@ export type WorkPeriod = {
   startTime: string,
   startReason: $Values<typeof EventReason>,
   endTime?: string,
-  endReason?: $Values<typeof EventReason>
+  endReason?: $Values<typeof EventReason>,
+  comment?: string
 };
 
 export type WorkPeriods = {
@@ -82,7 +83,7 @@ const getAllWorkPeriods = memoize((workPeriods: WorkPeriods) => {
     .map(key => workPeriods[key]);
 });
 
-export default class WorkTimeProvider extends Component<Props, State> {
+export default class WorkSessionProvider extends Component<Props, State> {
   idleTimerId = undefined;
 
   constructor(props: Props) {
@@ -145,6 +146,54 @@ export default class WorkTimeProvider extends Component<Props, State> {
         return this.updateAutoLaunch(value);
       default:
     }
+  };
+
+  mergeWorkPeriods = (workPeriodId: string, nextWorkPeriodId: string) => {
+    this.setState(prevState => {
+      const workPeriods = { ...prevState.workPeriods };
+      workPeriods[workPeriodId] = {
+        ...workPeriods[workPeriodId],
+        endTime: workPeriods[nextWorkPeriodId].endTime,
+        endReason: workPeriods[nextWorkPeriodId].endReason,
+        comment: [
+          workPeriods[workPeriodId].comment,
+          workPeriods[nextWorkPeriodId].comment
+        ]
+          .filter(val => val != null)
+          .join('\n')
+      };
+      delete workPeriods[nextWorkPeriodId];
+
+      return {
+        workPeriods
+      };
+    });
+  };
+
+  deleteWorkPeriod = (id: string) => {
+    this.setState(prevState => {
+      const workPeriods = { ...prevState.workPeriods };
+      delete workPeriods[id];
+      return {
+        workPeriods
+      };
+    });
+  };
+
+  updateWorkPeriod = (id: string, workPeriod: $Shape<WorkPeriod>) => {
+    this.setState(prevState => {
+      const updatedState = {
+        workPeriods: {
+          ...prevState.workPeriods,
+          [id]: {
+            ...prevState.workPeriods[id],
+            ...workPeriod
+          }
+        }
+      };
+      workSessionsCache.update(prevState.sessionId, updatedState);
+      return updatedState;
+    });
   };
 
   updateTimeOutThresholdSec(value: any) {
@@ -214,12 +263,12 @@ export default class WorkTimeProvider extends Component<Props, State> {
     this.idleChecker(true);
   };
 
-  idle = (currentIdleTime: number) => {
+  setTimedOut = (currentIdleTime: number) => {
     this.stopWorkPeriod(
       moment()
         .subtract(currentIdleTime, 'seconds')
         .toISOString(),
-      EventReason.idle
+      EventReason.timeOut
     );
     this.idleChecker();
   };
@@ -335,7 +384,7 @@ export default class WorkTimeProvider extends Component<Props, State> {
     const { working, timeOutThresholdSec } = this.state;
     if (working) {
       if (currentIdleTime >= timeOutThresholdSec) {
-        this.idle(currentIdleTime);
+        this.setTimedOut(currentIdleTime);
       } else {
         this.idleCheckerWorkMode(currentIdleTime);
       }
@@ -474,7 +523,10 @@ export default class WorkTimeProvider extends Component<Props, State> {
           clearCurrentSession: this.clearCurrentSession,
           workPeriods: this.getAllWorkPeriods(),
           changeSettings: this.changeSettings,
-          setTracking: this.setTracking
+          setTracking: this.setTracking,
+          updateWorkPeriod: this.updateWorkPeriod,
+          deleteWorkPeriod: this.deleteWorkPeriod,
+          mergeWorkPeriods: this.mergeWorkPeriods
         }}
       >
         {this.props.children}

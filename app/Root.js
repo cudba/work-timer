@@ -1,19 +1,24 @@
 // @flow
 import React, { Component } from 'react';
+import moment from 'moment-timezone';
 import { Provider } from 'react-redux';
 import type { Store } from './reducers/types';
 import { MuiThemeProvider, createMuiTheme } from '@material-ui/core/styles';
+import MomentUtils from '@date-io/moment';
 import WorkTimer from './work-timer/WorkTimer';
-import WorkTimeProvider from './work-timer/WorkTimeProvider';
+import WorkSessionProvider from './work-timer/WorkSessionProvider';
+import MuiPickersUtilsProvider from 'material-ui-pickers/MuiPickersUtilsProvider';
+
+moment.tz.setDefault('Europe/Zurich');
 
 const theme = createMuiTheme({
   palette: {
     type: 'dark',
     primary: {
-      main: '#004d40'
+      main: '#383e47'
     },
     secondary: {
-      main: '#00bfa5'
+      main: '#388e3c'
     }
   }
 });
@@ -28,9 +33,11 @@ export default class Root extends Component<Props> {
     return (
       <Provider store={store}>
         <MuiThemeProvider theme={theme}>
-          <WorkTimeProvider>
-            <WorkTimer />
-          </WorkTimeProvider>
+          <MuiPickersUtilsProvider utils={MomentUtils} moment={moment}>
+            <WorkSessionProvider>
+              <WorkTimer />
+            </WorkSessionProvider>
+          </MuiPickersUtilsProvider>
         </MuiThemeProvider>
       </Provider>
     );

@@ -2,7 +2,7 @@
 
 import memoize from 'memoize-one';
 import * as _ from 'lodash';
-import type { WorkSession, WorkSessions } from '../work-timer/WorkTimeProvider';
+import type { WorkSession, WorkSessions } from '../work-timer/WorkSessionProvider';
 
 const key = 'work-sessions';
 

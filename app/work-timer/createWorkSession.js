@@ -1,6 +1,6 @@
 // @flow
 import moment from 'moment';
-import type { WorkSession } from './WorkTimeProvider';
+import type { WorkSession } from './WorkSessionProvider';
 
 export default function(): WorkSession {
   return {

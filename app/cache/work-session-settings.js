@@ -1,5 +1,5 @@
 // @flow
-import type { WorkTimerSettings } from '../work-timer/WorkTimeProvider';
+import type { WorkTimerSettings } from '../work-timer/WorkSessionProvider';
 
 const key = 'worktimer-settings';
 

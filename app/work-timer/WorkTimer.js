@@ -45,8 +45,8 @@ class WorkTimer extends React.Component<Props, State> {
       <div className={classes.root}>
         <AppBar position="static">
           <Tabs value={value} onChange={this.onTabSelect}>
-            <Tab style={{ flex: 1, maxWidth: '100%' }} label="Today" />
-            <Tab style={{ flex: 1, maxWidth: '100%' }} label="All Sessions" />
+            <Tab disableRipple style={{ flex: 1, maxWidth: '100%' }} label="Today" />
+            <Tab disableRipple style={{ flex: 1, maxWidth: '100%' }} label="All Sessions" />
           </Tabs>
         </AppBar>
         <div style={{ height: '100%' }}>
