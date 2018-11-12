@@ -20,6 +20,12 @@ const theme = createMuiTheme({
     secondary: {
       main: '#388e3c'
     }
+  },
+  overrides: {
+    MuiSlider: {
+      track: { backgroundColor: '#388e3c' },
+      thumb: { backgroundColor: '#388e3c' },
+    },
   }
 });
 type Props = {

@@ -196,14 +196,14 @@ export default class WorkSessionProvider extends Component<Props, State> {
     });
   };
 
-  updateTimeOutThresholdSec(value: any) {
+  updateTimeOutThresholdSec = (value: any)  =>{
     this.setState({
       timeOutThresholdSec: value
     });
     workSessionSettings.updateSettings({ timeOutThresholdSec: value });
   }
 
-  updateActiveCheckerIntervalSec(value: any) {
+  updateActiveCheckerIntervalSec = (value: any) => {
     this.setState({
       activeCheckerIntervalSec: value
     });
@@ -431,7 +431,7 @@ export default class WorkSessionProvider extends Component<Props, State> {
     });
   }
 
-  updateIdleOnScreenLock(idleOnLock: boolean) {
+  updateIdleOnScreenLock = (idleOnLock: boolean) => {
     const { working } = this.state;
     if (working) {
       if (idleOnLock) {
@@ -447,7 +447,7 @@ export default class WorkSessionProvider extends Component<Props, State> {
     workSessionSettings.updateSettings({ idleOnLock });
   }
 
-  updateIdleOnTimeOut(idleOnTimeOut: boolean) {
+  updateIdleOnTimeOut = (idleOnTimeOut: boolean) =>{
     const { working } = this.state;
     if (working) {
       if (idleOnTimeOut) {
@@ -526,7 +526,11 @@ export default class WorkSessionProvider extends Component<Props, State> {
           setTracking: this.setTracking,
           updateWorkPeriod: this.updateWorkPeriod,
           deleteWorkPeriod: this.deleteWorkPeriod,
-          mergeWorkPeriods: this.mergeWorkPeriods
+          mergeWorkPeriods: this.mergeWorkPeriods,
+          updateTimeOutThresholdSec: this.updateTimeOutThresholdSec,
+          updateActiveCheckerIntervalSec: this.updateActiveCheckerIntervalSec,
+          updateIdleOnTimeOut: this.updateIdleOnTimeOut,
+          updateIdleOnScreenLock: this.updateIdleOnScreenLock
         }}
       >
         {this.props.children}

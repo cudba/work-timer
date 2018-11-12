@@ -170,7 +170,7 @@ function attachRendererListeners() {
     setIdleOnTimeOut(idleOnTimeOut);
   });
   ipcMain.on('set-idle-on-screen-lock', (event, idleOnTimeOut) => {
-    setIdleOnTimeOut(idleOnTimeOut);
+    setIdleOnScreenLock(idleOnTimeOut);
   });
   ipcMain.on('set-auto-launch', (event, autoLaunch: boolean) => {
     setAutoLaunch(autoLaunch);
