@@ -6,6 +6,7 @@ import Tabs from '@material-ui/core/Tabs';
 import Tab from '@material-ui/core/Tab';
 import Today from './Today';
 import WorkSessions from './WorkSessions';
+import GlobalSettings from '../global-settings/GlobalSettings';
 
 const styles = theme => ({
   root: {
@@ -17,7 +18,8 @@ const styles = theme => ({
 
 const Pages = {
   [0]: Today,
-  [1]: WorkSessions
+  [1]: WorkSessions,
+  [2]: GlobalSettings
 };
 
 type Props = {
@@ -47,9 +49,10 @@ class WorkTimer extends React.Component<Props, State> {
           <Tabs value={value} onChange={this.onTabSelect}>
             <Tab disableRipple style={{ flex: 1, maxWidth: '100%' }} label="Today" />
             <Tab disableRipple style={{ flex: 1, maxWidth: '100%' }} label="All Sessions" />
+            <Tab disableRipple style={{ flex: 1, maxWidth: '100%' }} label="Settings" />
           </Tabs>
         </AppBar>
-        <div style={{ height: '100%' }}>
+        <div style={{ height: 'calc(100vh - 48px)', overflow: 'hidden'}}>
           <Page />
         </div>
       </div>
