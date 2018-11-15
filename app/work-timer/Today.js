@@ -101,11 +101,11 @@ class Today extends React.Component {
                 justifyContent: 'flex-end'
               }}
             >
-              {workPeriods.length && (
+              {workPeriods.length ? (
                 <Button variant="outlined" onClick={clearCurrentSession}>
                   clear
                 </Button>
-              )}
+              ) : null}
             </div>
             <div
               style={{
