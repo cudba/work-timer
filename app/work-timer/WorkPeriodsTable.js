@@ -29,6 +29,7 @@ class WorkPeriodsTable extends React.Component {
   render() {
     const {
       classes,
+      tracking,
       workPeriods,
       updateWorkPeriod,
       mergeWorkPeriods,
@@ -42,6 +43,7 @@ class WorkPeriodsTable extends React.Component {
             <TableRow>
               <TableCell style={{ width: 70 }}>Start Time </TableCell>
               <TableCell style={{ width: 70 }}>End Time</TableCell>
+              <TableCell style={{ width: 50 }}>Hours</TableCell>
               <TableCell>Comment</TableCell>
               <TableCell />
             </TableRow>
@@ -57,6 +59,7 @@ class WorkPeriodsTable extends React.Component {
                     scope="row"
                   >
                     <TimePicker
+                      label={workPeriod.startReason}
                       variant="outlined"
                       margin="dense"
                       okLabel={<Typography>OK</Typography>}
@@ -68,6 +71,7 @@ class WorkPeriodsTable extends React.Component {
                         })
                       }
                       ampm={false}
+                      disabled={tracking}
                     />
                   </TableCell>
                   <TableCell
@@ -78,6 +82,7 @@ class WorkPeriodsTable extends React.Component {
                   >
                     {workPeriod.endTime && (
                       <TimePicker
+                        label={workPeriod.endReason}
                         variant="outlined"
                         margin="dense"
                         okLabel={<Typography>OK</Typography>}
@@ -89,27 +94,46 @@ class WorkPeriodsTable extends React.Component {
                           })
                         }
                         ampm={false}
+                        disabled={tracking}
                       />
                     )}
                   </TableCell>
+                  <TableCell
+                    style={{ width: 50 }}
+                    padding="dense"
+                    component="th"
+                    scope="row"
+                  >
+                    {workPeriod.endTime &&
+                      (
+                        moment(workPeriod.endTime).diff(
+                          moment(workPeriod.startTime),
+                          'seconds'
+                        ) / 3600
+                      ).toFixed(2)}
+                  </TableCell>
                   <TableCell>
-                    <TextField
-                      variant="outlined"
-                      fullWidth
-                      multiline
-                      rowsMax="4"
-                      value={workPeriod.comment}
-                      onChange={event =>
-                        updateWorkPeriod(workPeriod.id, {
-                          comment: event.target.value
-                        })
-                      }
-                    />
+                    {workPeriod.endTime && (
+                      <TextField
+                        variant="outlined"
+                        fullWidth
+                        multiline
+                        rowsMax="4"
+                        value={workPeriod.comment}
+                        onChange={event =>
+                          updateWorkPeriod(workPeriod.id, {
+                            comment: event.target.value
+                          })
+                        }
+                        disabled={tracking}
+                      />
+                    )}
                   </TableCell>
                   <TableCell>
                     {workPeriod.endTime && (
                       <>
                         <MergeMenu
+                          disabled={tracking}
                           workPeriodId={workPeriod.id}
                           nextWorkPeriodId={
                             workPeriods[index + 1] && workPeriods[index + 1].id
@@ -120,6 +144,7 @@ class WorkPeriodsTable extends React.Component {
                           mergeWorkPeriods={mergeWorkPeriods}
                         />
                         <Button
+                          disabled={tracking}
                           style={{ marginRight: 10 }}
                           size="small"
                           onClick={() => deleteWorkPeriod(workPeriod.id)}

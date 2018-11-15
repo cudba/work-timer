@@ -13,14 +13,15 @@ import createWorkPeriod from './createWorkPeriod';
 import workSessionSettings from '../cache/work-session-settings';
 
 export const EventReason = Object.freeze({
-  timeOut: 'timeOut',
+  timeOut: 'time-out',
   active: 'active',
   suspend: 'suspended',
   lock: 'locked',
   shutdown: 'shutdown',
   resume: 'resume',
   unlock: 'unlock',
-  user_action: 'user-action'
+  start_tracking: 'start-tracking',
+  stop_tracking: 'stop-tracking'
 });
 
 export type WorkPeriod = {
@@ -75,11 +76,11 @@ const initialSession: WorkSession = createWorkSession();
 
 const { Consumer, Provider } = React.createContext();
 
-export const WorkTimeConsumer = Consumer;
+export const WorkSessionConsumer = Consumer;
 
 const getAllWorkPeriods = memoize((workPeriods: WorkPeriods) => {
   return Object.keys(workPeriods)
-    .sort()
+    .reverse()
     .map(key => workPeriods[key]);
 });
 
@@ -196,19 +197,19 @@ export default class WorkSessionProvider extends Component<Props, State> {
     });
   };
 
-  updateTimeOutThresholdSec = (value: any)  =>{
+  updateTimeOutThresholdSec = (value: any) => {
     this.setState({
       timeOutThresholdSec: value
     });
     workSessionSettings.updateSettings({ timeOutThresholdSec: value });
-  }
+  };
 
   updateActiveCheckerIntervalSec = (value: any) => {
     this.setState({
       activeCheckerIntervalSec: value
     });
     workSessionSettings.updateSettings({ activeCheckerIntervalSec: value });
-  }
+  };
 
   onShowEventsChange = (event: SyntheticInputEvent<HTMLInputElement>) => {
     this.setState({
@@ -445,9 +446,9 @@ export default class WorkSessionProvider extends Component<Props, State> {
     });
     tray.setIdleOnScreenLock(idleOnLock);
     workSessionSettings.updateSettings({ idleOnLock });
-  }
+  };
 
-  updateIdleOnTimeOut = (idleOnTimeOut: boolean) =>{
+  updateIdleOnTimeOut = (idleOnTimeOut: boolean) => {
     const { working } = this.state;
     if (working) {
       if (idleOnTimeOut) {
@@ -461,7 +462,7 @@ export default class WorkSessionProvider extends Component<Props, State> {
     });
     tray.setIdleOnTimeOut(idleOnTimeOut);
     workSessionSettings.updateSettings({ idleOnTimeOut });
-  }
+  };
 
   startTracking() {
     const { idleOnLock } = this.state;
@@ -469,14 +470,14 @@ export default class WorkSessionProvider extends Component<Props, State> {
       this.addLockListeners();
     }
     this.idleChecker(true);
-    this.startWorkPeriod(moment().toISOString(), EventReason.user_action);
+    this.startWorkPeriod(moment().toISOString(), EventReason.start_tracking);
     this.setState({ tracking: true });
   }
 
   stopTracking() {
     this.stopIdleChecker();
     this.removeLockListeners();
-    this.stopWorkPeriod(moment().toISOString(), EventReason.user_action);
+    this.stopWorkPeriod(moment().toISOString(), EventReason.stop_tracking);
     this.setState({ idleTime: 0, tracking: false });
   }
 

@@ -22,12 +22,12 @@ export default class MergeMenu extends React.Component {
   };
 
   render() {
-    const { workPeriodId, nextWorkPeriodId, prevWorkPeriodId } = this.props;
+    const { workPeriodId, nextWorkPeriodId, prevWorkPeriodId, disabled } = this.props;
     const { anchorEl } = this.state;
 
     return nextWorkPeriodId || prevWorkPeriodId ? (
       <>
-        <Button size="small" onClick={this.openMenu}>
+        <Button size="small" onClick={this.openMenu} disabled={disabled}>
           MERGE
         </Button>
         <Menu

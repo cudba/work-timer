@@ -3,7 +3,7 @@ import IconButton from '@material-ui/core/IconButton';
 import Button from '@material-ui/core/Button';
 import StartTrackingIcon from '@material-ui/icons/PlayCircleOutline';
 import StopTrackingIcon from '@material-ui/icons/PauseCircleOutline';
-import { WorkTimeConsumer } from './WorkSessionProvider';
+import { WorkSessionConsumer } from './WorkSessionProvider';
 import WorkPeriodsTable from './WorkPeriodsTable';
 import Typography from '@material-ui/core/Typography';
 import Slider from '@material-ui/lab/Slider';
@@ -13,7 +13,7 @@ import Switch from '@material-ui/core/Switch';
 class Today extends React.Component {
   render() {
     return (
-      <WorkTimeConsumer>
+      <WorkSessionConsumer>
         {({
           tracking,
           working,
@@ -75,7 +75,10 @@ class Today extends React.Component {
               {idleOnTimeOut && (
                 <div style={{ display: 'inline-block' }}>
                   <Typography style={{ display: 'inline-block' }}>
-                    Idle after {`${Math.trunc(timeOutThresholdSec / 60)} min ${(timeOutThresholdSec /60 % 1) * 60} seconds`}
+                    Idle after{' '}
+                    {`${Math.trunc(
+                      timeOutThresholdSec / 60
+                    )} min ${((timeOutThresholdSec / 60) % 1) * 60} seconds`}
                   </Typography>
                   <Slider
                     max={15}
@@ -98,9 +101,11 @@ class Today extends React.Component {
                 justifyContent: 'flex-end'
               }}
             >
-              <Button variant="outlined" onClick={clearCurrentSession}>
-                clear
-              </Button>
+              {workPeriods.length && (
+                <Button variant="outlined" onClick={clearCurrentSession}>
+                  clear
+                </Button>
+              )}
             </div>
             <div
               style={{
@@ -110,6 +115,7 @@ class Today extends React.Component {
               }}
             >
               <WorkPeriodsTable
+                tracking={tracking}
                 workPeriods={workPeriods}
                 updateWorkPeriod={updateWorkPeriod}
                 mergeWorkPeriods={mergeWorkPeriods}
@@ -118,7 +124,7 @@ class Today extends React.Component {
             </div>
           </div>
         )}
-      </WorkTimeConsumer>
+      </WorkSessionConsumer>
     );
   }
 }
