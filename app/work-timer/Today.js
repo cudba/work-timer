@@ -1,5 +1,6 @@
 import React from 'react';
 import IconButton from '@material-ui/core/IconButton';
+import Button from '@material-ui/core/Button';
 import StartTrackingIcon from '@material-ui/icons/PlayCircleOutline';
 import StopTrackingIcon from '@material-ui/icons/PauseCircleOutline';
 import { WorkTimeConsumer } from './WorkSessionProvider';
@@ -34,9 +35,9 @@ class Today extends React.Component {
             style={{
               display: 'flex',
               flexDirection: 'column',
-              height: '95vh',
-              fontSize: 14,
-              paddingTop: 20
+              height: '100%',
+              overflow: 'hidden',
+              fontSize: 14
             }}
           >
             <div style={{ margin: '10px auto' }}>
@@ -48,7 +49,7 @@ class Today extends React.Component {
                 )}
               </IconButton>
             </div>
-            <div style={{margin: '10px auto'}}>
+            <div style={{ margin: '10px auto' }}>
               <FormControlLabel
                 control={
                   <Switch
@@ -72,41 +73,48 @@ class Today extends React.Component {
                 label="Set idle on time out"
               />
               {idleOnTimeOut && (
-                <div style={{display: 'inline-block'}}>
-                  <Typography style={{display: 'inline-block'}}>
-                    Idle Time Out ({`${timeOutThresholdSec / 60} min`})
+                <div style={{ display: 'inline-block' }}>
+                  <Typography style={{ display: 'inline-block' }}>
+                    Idle after {`${Math.trunc(timeOutThresholdSec / 60)} min ${(timeOutThresholdSec /60 % 1) * 60} seconds`}
                   </Typography>
                   <Slider
                     max={15}
-                    min={0}
+                    min={0.25}
+                    step={0.25}
                     style={{ width: 200, marginTop: 10 }}
                     value={timeOutThresholdSec / 60}
                     onChange={(event, value) =>
-                      updateTimeOutThresholdSec(value.toFixed(0) * 60)
+                      updateTimeOutThresholdSec(value * 60)
                     }
                   />
                 </div>
               )}
             </div>
-            <div style={{ flex: 1, marginTop: 20, position: 'relative' }}>
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  overflow: 'auto'
-                }}
-              >
-                <WorkPeriodsTable
-                  workPeriods={workPeriods}
-                  updateWorkPeriod={updateWorkPeriod}
-                  mergeWorkPeriods={mergeWorkPeriods}
-                  deleteWorkPeriod={deleteWorkPeriod}
-                  clear={clearCurrentSession}
-                />
-              </div>
+            <div
+              style={{
+                margin: '40px 20px 20px 0px',
+                float: 'right',
+                display: 'flex',
+                justifyContent: 'flex-end'
+              }}
+            >
+              <Button variant="outlined" onClick={clearCurrentSession}>
+                clear
+              </Button>
+            </div>
+            <div
+              style={{
+                flex: 1,
+                height: '100%',
+                overflow: 'auto'
+              }}
+            >
+              <WorkPeriodsTable
+                workPeriods={workPeriods}
+                updateWorkPeriod={updateWorkPeriod}
+                mergeWorkPeriods={mergeWorkPeriods}
+                deleteWorkPeriod={deleteWorkPeriod}
+              />
             </div>
           </div>
         )}

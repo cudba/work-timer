@@ -10,15 +10,12 @@ import TableBody from '@material-ui/core/TableBody';
 import TableCell from '@material-ui/core/TableCell';
 import TableHead from '@material-ui/core/TableHead';
 import TableRow from '@material-ui/core/TableRow';
-import MenuItem from '@material-ui/core/MenuItem';
-import Menu from '@material-ui/core/Menu';
 import MergeMenu from './MergeMenu';
 
 const styles = theme => ({
   root: {
     width: '100%',
     // maxWidth: 600,
-    marginTop: theme.spacing.unit * 3,
     marginBottom: theme.spacing.unit * 3,
     overflowX: 'auto'
   },
@@ -35,17 +32,11 @@ class WorkPeriodsTable extends React.Component {
       workPeriods,
       updateWorkPeriod,
       mergeWorkPeriods,
-      deleteWorkPeriod,
-      clear
+      deleteWorkPeriod
     } = this.props;
 
     return workPeriods.length ? (
       <div className={classes.root}>
-        <div style={{ marginRight: 20, marginBottom: 20, float: 'right' }}>
-          <Button variant="outlined" onClick={clear}>
-            clear
-          </Button>
-        </div>
         <Table className={classes.table}>
           <TableHead>
             <TableRow>
@@ -103,6 +94,7 @@ class WorkPeriodsTable extends React.Component {
                   </TableCell>
                   <TableCell>
                     <TextField
+                      variant="outlined"
                       fullWidth
                       multiline
                       rowsMax="4"

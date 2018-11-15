@@ -32,6 +32,9 @@ const workSessionSettings = {
     } else {
       localStorage.setItem(key, JSON.stringify(workSessionSettings));
     }
+  },
+  flushAll() {
+    localStorage.removeItem(key)
   }
 };
 export default workSessionSettings;

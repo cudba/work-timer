@@ -70,10 +70,6 @@ const workSessionsCache = {
       );
     }
   },
-  delete(id: string) {
-    localStorage.removeItem(key + id);
-  },
-
   flushAll() {
     localStorage.removeItem(key);
   }
