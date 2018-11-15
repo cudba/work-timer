@@ -80,7 +80,6 @@ export const WorkSessionConsumer = Consumer;
 
 const getAllWorkPeriods = memoize((workPeriods: WorkPeriods) => {
   return Object.keys(workPeriods)
-    .reverse()
     .map(key => workPeriods[key]);
 });
 
